@@ -484,7 +484,7 @@ async function submitTransfer(body: unknown) {
     throw new RelayerError(
       400,
       "PREPARED_TRANSACTION_MISSING_SOROBAN_DATA",
-      "Prepared transfer transaction is missing Soroban simulation data."
+      "Prepared transfer transaction is missing Soroban preflight data."
     );
   }
 
