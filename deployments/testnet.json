@@ -1,0 +1,20 @@
+{
+  "network": "testnet",
+  "rpcUrl": "https://soroban-testnet.stellar.org",
+  "networkPassphrase": "Test SDF Network ; September 2015",
+  "deployedAt": "2026-06-21T22:40:07Z",
+  "deployerPublicKey": "GBTGFKAOKZFD54K74AOI7QHS4UBIYBPFN5OU3CTXRNCGV3GTOIRL7H5Z",
+  "accountWasmHash": "a15735d74aa1c892063d75014bdc848ec9f7987813064b4b09c37cb6bc69646e",
+  "verificationKeyPath": "circuits/stelakey_auth/target/vk.soroban",
+  "verificationKeyBytes": 1760,
+  "verificationKeyHash": "6dfbb9837b001ef99c7b32afdfb9e488f6c15c24f7eea9e76291ee1916b1966b",
+  "verifierContractId": "CCFJSBSDOOT65K56MNBLZLAPZ47ZJ64F3TKP4VNOTFXSCEMQ7P3A54LS",
+  "deployerContractId": "CDG2AJMIVLEVBV2HE7KLK3LHOO6FVGHLEUW63ID2YK6O5755BHF62HZA",
+  "status": "testnet-account-deployer-live",
+  "notes": [
+    "Verifier contract stores the generated UltraHonk verification key.",
+    "Account WASM is uploaded and __check_auth binds verifier public inputs to the owner commitment, Soroban payload hash, network hash, expiry ledger, and wallet scheme.",
+    "The deployerContractId deploys and initializes account contracts with owner commitment and verifier config.",
+    "This manifest includes deployed infrastructure only and does not claim a working transfer flow."
+  ]
+}

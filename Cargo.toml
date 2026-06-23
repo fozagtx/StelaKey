@@ -1,0 +1,16 @@
+[workspace]
+members = [
+  "crates/ultrahonk-soroban-verifier",
+  "contracts/account",
+  "contracts/deployer",
+  "contracts/verifier",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+rust-version = "1.91"
+
+[workspace.dependencies]
+soroban-sdk = "27.0.0-rc.1"

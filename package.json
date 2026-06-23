@@ -1,0 +1,22 @@
+{
+  "name": "stelakey",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.0.0",
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev:prover": "pnpm --filter @stelakey/prover dev",
+    "dev:relayer": "pnpm --filter @stelakey/relayer dev",
+    "dev:web": "pnpm --filter @stelakey/web dev",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "@noble/secp256k1": "^3.1.0",
+    "@types/node": "^22.15.21",
+    "tsx": "^4.19.4",
+    "turbo": "^2.5.4",
+    "typescript": "^5.8.3"
+  }
+}
