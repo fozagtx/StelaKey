@@ -12,7 +12,8 @@ The current build is a credible hackathon MVP foundation:
 - Connected-wallet account setup is wired to the live Stellar testnet account deployer.
 - The live same-origin prover route reports ready and is wired to Noir/UltraHonk.
 - The account contract implements `__check_auth` binding checks.
-- Production aliases are live at `https://stelakey.vercel.app` and `https://stelakey-fawuzan.vercel.app`; live readiness still requires a real wallet retry against a deployment that contains the runtime-git prover fix.
+- Production deployment `dpl_Ft1ErssPtPgQ2cyDGmY2cwe1DKMM` is live at `https://web-jwtgpnttm-fawuzantechs-projects.vercel.app`.
+- Public aliases `https://stelakey.vercel.app` and `https://stelakey-fawuzan.vercel.app` point to deployment `dpl_Ft1ErssPtPgQ2cyDGmY2cwe1DKMM`.
 - Public aliases `https://stelakey.vercel.app` and `https://stelakey-fawuzan.vercel.app` were pointed at that deployment on June 23, 2026.
 - Latest app-shell UI pass removes the visible Dashboard sidebar item, keeps the collapsed sidebar as a clickable icon rail, removes unwanted sidebar hover/click movement animations, adds a dedicated StelaKey mark, tightens Transfer spacing, and removes duplicate protected-page header labels.
 - Production proof attempts exposed two real serverless prover blockers: first Nargo tried to lock its git dependency cache on Vercel's read-only `/var/task` filesystem; after the writable-cache fix, Nargo then failed because Vercel's runtime has no `git` binary. Current source fixes both by forcing Nargo cache/home paths into writable `/tmp` locations and by vendoring Noir dependencies as local path dependencies copied into each proof job.
@@ -34,7 +35,7 @@ The remaining blocker is the real connected-wallet transfer path:
 | `cargo build --workspace --target wasm32v1-none` | Pass | Soroban contracts and verifier crate build to wasm target. |
 | `cargo test --workspace` | Pass | Default Rust tests pass. |
 | `bash scripts/build-circuit.sh` | Pass | Noir compiles with known SHA-256 Brillig warnings; script exits without generating proof artifacts because no real `Prover.toml` witness is present. |
-| Live prover readiness | Pass | `https://stelakey.vercel.app/api/prover/health` reports `ready` with `noir-ultrahonk-bbjs` and no missing config. |
+| Live prover readiness | Pass | `https://stelakey.vercel.app/api/prover/health` reports `ready` with `noir-ultrahonk-bbjs`, `nargo version = 1.0.0-beta.9`, and no missing config on deployment `dpl_Ft1ErssPtPgQ2cyDGmY2cwe1DKMM`. |
 | Live `https://stelakey.vercel.app` | Pass | Public landing responds with the user-facing wallet-to-Stellar promise. |
 | Live protected routes | Inconclusive | Static terminal fetches return 200, but protected-route gating needs a hydrated browser session to verify. Browser control was not used. |
 | Live account deploy readiness | Pass | `/api/accounts/deploy` reports ready with deployer, verifier, and fixed account WASM hash. |
@@ -50,7 +51,7 @@ The remaining blocker is the real connected-wallet transfer path:
 | Submit hash guard | Pass | The transfer UI records success only when submit returns `status: "submitted"` and a real `txHash`. |
 | Rejected proof shape | Pass | Rejected `/api/proofs` responses no longer return a synthetic `proofId`; a proof ID appears only on a ready proof response. |
 | Sidebar/app-shell UI build | Pass | Source and production build include a dedicated StelaKey mark, no visible Dashboard sidebar nav item, a collapsed icon rail for Account/Transfer/Activity, and reduced-motion support for sidebar transitions. |
-| Vercel Nargo runtime path | Fixed in source, needs real wallet retry | Previous live proof failures were the read-only Nargo cache and then missing runtime `git`. Current source uses writable temp cache/home paths and vendored Noir deps copied into the proof workspace. Local no-git `createProof()` smoke produced proof bytes and public inputs. |
+| Vercel Nargo runtime path | Fixed in source and deployed, needs real wallet retry | Previous live proof failures were the read-only Nargo cache and then missing runtime `git`. Current deployed source uses writable temp cache/home paths and vendored Noir deps copied into the proof workspace. Local no-git `createProof()` smoke produced proof bytes and public inputs. A production proof POST was not run with a fixture wallet because project rules forbid fixture-created proof records on deployed URLs. |
 | Stub endpoint removal | Pass | Standalone relayer 501 `*_NOT_IMPLEMENTED` endpoints were removed; stale RISC0/Circom fallback README files and RISC0 env hint were removed. |
 
 ## PRD Acceptance Criteria
