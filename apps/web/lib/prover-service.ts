@@ -257,6 +257,9 @@ function publicInputsToBytes(publicInputs: string[]) {
 }
 
 async function proveWithBbJs(workDir: string) {
+  const crsPath = resolve(workDir, ".bb-crs");
+  await mkdir(crsPath, { recursive: true });
+
   const [artifactText, witness] = await Promise.all([
     readFile(resolve(workDir, "target/stelakey_auth.json"), "utf8"),
     readFile(resolve(workDir, "target/stelakey_auth.gz"))
@@ -267,7 +270,7 @@ async function proveWithBbJs(workDir: string) {
     throw new ProverError(500, "PROOF_GENERATION_FAILED", "Compiled Noir artifact is missing bytecode.");
   }
 
-  const backend = new UltraHonkBackend(artifact.bytecode, { threads: 1 });
+  const backend = new UltraHonkBackend(artifact.bytecode, { threads: 1, crsPath });
   try {
     const proofData = await backend.generateProof(witness, { keccak: true });
     const verified = await backend.verifyProof(proofData, { keccak: true });
