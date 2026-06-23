@@ -12,9 +12,10 @@ The current build is a credible hackathon MVP foundation:
 - Connected-wallet account setup is wired to the live Stellar testnet account deployer.
 - The live same-origin prover route reports ready and is wired to Noir/UltraHonk.
 - The account contract implements `__check_auth` binding checks.
-- Production deployment `dpl_4LzQWcR4BaBG1yXLrChJRS2w85kQ` is live at `https://web-9hurfc9il-fawuzantechs-projects.vercel.app`.
+- Production deployment `dpl_D7P91yWowM5wYFWVeEGYzxCYRefe` is live at `https://web-9pt0d7ko2-fawuzantechs-projects.vercel.app`.
 - Public aliases `https://stelakey.vercel.app` and `https://stelakey-fawuzan.vercel.app` were pointed at that deployment on June 23, 2026.
-- Latest app-shell UI pass removes the visible Dashboard sidebar item, keeps the collapsed sidebar as a clickable icon rail, adds a dedicated StelaKey mark, tightens Transfer spacing, and removes duplicate protected-page header labels.
+- Latest app-shell UI pass removes the visible Dashboard sidebar item, keeps the collapsed sidebar as a clickable icon rail, removes unwanted sidebar hover/click movement animations, adds a dedicated StelaKey mark, tightens Transfer spacing, and removes duplicate protected-page header labels.
+- A production proof attempt on the previous deployment failed because `nargo compile` tried to lock its git dependency cache on Vercel's read-only `/var/task` filesystem. The current deployment forces Nargo `HOME`, `XDG_CACHE_HOME`, and `NARGO_HOME` into the proof job's writable `/tmp` work directory.
 
 The remaining blocker is the real connected-wallet transfer path:
 
@@ -49,6 +50,8 @@ The remaining blocker is the real connected-wallet transfer path:
 | Submit hash guard | Pass | The transfer UI records success only when submit returns `status: "submitted"` and a real `txHash`. |
 | Rejected proof shape | Pass | Rejected `/api/proofs` responses no longer return a synthetic `proofId`; a proof ID appears only on a ready proof response. |
 | Sidebar/app-shell UI build | Pass | Source and production build include a dedicated StelaKey mark, no visible Dashboard sidebar nav item, a collapsed icon rail for Account/Transfer/Activity, and reduced-motion support for sidebar transitions. |
+| Vercel Nargo cache path | Fixed, needs real wallet retry | Previous live proof failure was `Failed to lock git dependencies cache: Read-only file system`; current code runs Nargo with writable temp cache/home paths. A real connected-wallet proof must be retried to confirm the full proof path. |
+| Stub endpoint removal | Pass | Standalone relayer 501 `*_NOT_IMPLEMENTED` endpoints were removed; stale RISC0/Circom fallback README files and RISC0 env hint were removed. |
 
 ## PRD Acceptance Criteria
 
@@ -80,7 +83,7 @@ Done:
 
 Not done:
 
-- Same-origin web transfer routes are deployed and ready, but still need a real connected-wallet proof before a transfer can be confirmed.
+- Same-origin web transfer routes are deployed and ready, but still need a real connected-wallet proof retry after the Vercel Nargo cache fix before a transfer can be confirmed.
 - No real transfer transaction hash can be shown yet.
 
 ## Known Coverage Gaps

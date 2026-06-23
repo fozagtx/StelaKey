@@ -765,17 +765,12 @@ h3 {
   background: var(--white);
   color: var(--teal);
   cursor: pointer;
-  transition:
-    background-color 160ms cubic-bezier(0.4, 0, 0.2, 1),
-    border-color 160ms cubic-bezier(0.4, 0, 0.2, 1),
-    transform 160ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .sidebar-toggle-button:hover,
 .sidebar-toggle-button:focus-visible {
   border-color: var(--teal);
   background: var(--app-surface-blue);
-  transform: scale(1.04);
 }
 
 .sidebar-toggle-button:focus-visible {
@@ -858,10 +853,6 @@ h3 {
   color: var(--teal);
   font-size: 0.95rem;
   font-weight: 850;
-  transition:
-    background-color 160ms cubic-bezier(0.4, 0, 0.2, 1),
-    color 160ms cubic-bezier(0.4, 0, 0.2, 1),
-    transform 160ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .sidebar-menu-button svg {
@@ -901,12 +892,6 @@ h3 {
 .sidebar-menu-button:hover {
   background: var(--app-surface-blue-strong);
   color: var(--teal);
-  transform: translateX(2px);
-}
-
-.sidebar.collapsed .sidebar-menu-button.active,
-.sidebar.collapsed .sidebar-menu-button:hover {
-  transform: scale(1.05);
 }
 
 .app-main {

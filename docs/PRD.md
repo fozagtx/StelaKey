@@ -175,7 +175,7 @@ Required:
 - Collapsed sidebar must remain useful: show a clickable icon rail for Account, Transfer, and Activity instead of a blank rail.
 - Sidebar route navigation must not include a visible Dashboard item. The brand mark may link back to `/dashboard`.
 - Sidebar brand must use a dedicated StelaKey mark next to the StelaKey wordmark when expanded, and the mark only when collapsed. Do not combine Bitcoin and Stellar official logos into the StelaKey app logo.
-- Sidebar open/close motion must be under 300ms, use a custom easing curve, and respect `prefers-reduced-motion`.
+- Sidebar open/close motion must be under 300ms, use a custom easing curve, and respect `prefers-reduced-motion`. Do not add hover/click movement animations to sidebar navigation items; route clicks should feel still and immediate.
 - Protected route headers must avoid duplicate label/title stacks such as "StelaKey account" followed by "Account" or "Transfer" followed by another transfer heading.
 - Wallet identity chip.
 - Account status.
@@ -241,6 +241,7 @@ Current implementation status:
 - Transfer `prepare-auth` must build a real Stellar SAC transfer authorization payload.
 - Transfer preparation errors must not expose internal RPC/preflight labels such as simulation. The UI must say the payment could not be prepared and include a concrete reason when available, such as invalid recipient, missing recipient account, unsupported asset, or Stellar RPC rejection.
 - Proof-generation errors must not expose internal command names such as `PROVER_COMMAND_FAILED`, raw binary paths, or stack details. The UI should say authorization could not be completed, that no transaction was submitted, and, when accurate, that the user can try again after the service records the error.
+- Production proof generation must run Noir/Nargo with writable runtime cache/home paths. A health check that only runs `nargo --version` is not enough to claim proof generation works.
 - Transfer `submit` must attach `AuthProof` to the auth entry before signing/sending.
 - The submit path is not live-finished until a real connected wallet signs the transfer challenge and a real Stellar transaction confirms from the browser flow.
 

@@ -1,6 +1,6 @@
 import nodeCrypto from "node:crypto";
 import { execFile } from "node:child_process";
-import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -202,11 +202,11 @@ function commandFailureDetail(error: unknown) {
   return parts.length > 0 ? parts.join("\n") : "command failed";
 }
 
-async function run(command: string, args: string[], cwd: string) {
+async function run(command: string, args: string[], cwd: string, env: NodeJS.ProcessEnv = process.env) {
   try {
     await execFileAsync(command, args, {
       cwd,
-      env: process.env,
+      env,
       maxBuffer: 1024 * 1024 * 20
     });
   } catch (error) {
@@ -221,6 +221,24 @@ async function run(command: string, args: string[], cwd: string) {
       "Authorization could not be completed because the proof service could not generate a valid proof. No transaction was submitted."
     );
   }
+}
+
+async function writableNargoEnv(workDir: string) {
+  const homeDir = resolve(workDir, ".runtime-home");
+  const cacheDir = resolve(workDir, ".runtime-cache");
+  const nargoDir = resolve(workDir, ".runtime-nargo");
+  await Promise.all([
+    mkdir(homeDir, { recursive: true }),
+    mkdir(cacheDir, { recursive: true }),
+    mkdir(nargoDir, { recursive: true })
+  ]);
+
+  return {
+    ...process.env,
+    HOME: homeDir,
+    XDG_CACHE_HOME: cacheDir,
+    NARGO_HOME: nargoDir
+  };
 }
 
 function publicInputsToBytes(publicInputs: string[]) {
@@ -439,6 +457,7 @@ export async function createProof(input: ProofInput) {
   const workDir = await mkdtemp(join(tmpdir(), "stelakey-proof-"));
 
   try {
+    const nargoEnv = await writableNargoEnv(workDir);
     await cp(resolve(circuitDir, "src"), resolve(workDir, "src"), { recursive: true });
     await cp(resolve(circuitDir, "Nargo.toml"), resolve(workDir, "Nargo.toml"));
 
@@ -466,8 +485,8 @@ wallet_scheme = "1"
 `;
 
     await writeFile(resolve(workDir, "Prover.toml"), proverToml);
-    await run(nargoBin, ["compile", "--force"], workDir);
-    await run(nargoBin, ["execute", "stelakey_auth"], workDir);
+    await run(nargoBin, ["compile", "--force"], workDir, nargoEnv);
+    await run(nargoBin, ["execute", "stelakey_auth"], workDir, nargoEnv);
     const { proofBytes, publicInputs } = await proveWithBbJs(workDir);
 
     return {

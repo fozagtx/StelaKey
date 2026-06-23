@@ -507,18 +507,6 @@ app.get("/health", (_req, res) => {
   });
 });
 
-app.post("/api/accounts/preview", (_req, res) => {
-  res.status(501).json({ status: "rejected", errorCode: "RELAYER_ACCOUNT_PREVIEW_NOT_IMPLEMENTED" });
-});
-
-app.post("/api/accounts/deploy", (_req, res) => {
-  res.status(501).json({ status: "rejected", errorCode: "RELAYER_ACCOUNT_DEPLOY_NOT_IMPLEMENTED" });
-});
-
-app.post("/api/transfers/test-asset", (_req, res) => {
-  res.status(501).json({ status: "rejected", errorCode: "RELAYER_TEST_ASSET_NOT_IMPLEMENTED" });
-});
-
 app.post("/api/transfers/prepare-auth", async (req, res) => {
   try {
     const prepared = await prepareTransfer(req.body);
