@@ -12,10 +12,10 @@ The current build is a credible hackathon MVP foundation:
 - Connected-wallet account setup is wired to the live Stellar testnet account deployer.
 - The live same-origin prover route reports ready and is wired to Noir/UltraHonk.
 - The account contract implements `__check_auth` binding checks.
-- Production deployment `dpl_D7P91yWowM5wYFWVeEGYzxCYRefe` is live at `https://web-9pt0d7ko2-fawuzantechs-projects.vercel.app`.
+- Production aliases are live at `https://stelakey.vercel.app` and `https://stelakey-fawuzan.vercel.app`; live readiness still requires a real wallet retry against a deployment that contains the runtime-git prover fix.
 - Public aliases `https://stelakey.vercel.app` and `https://stelakey-fawuzan.vercel.app` were pointed at that deployment on June 23, 2026.
 - Latest app-shell UI pass removes the visible Dashboard sidebar item, keeps the collapsed sidebar as a clickable icon rail, removes unwanted sidebar hover/click movement animations, adds a dedicated StelaKey mark, tightens Transfer spacing, and removes duplicate protected-page header labels.
-- A production proof attempt on the previous deployment failed because `nargo compile` tried to lock its git dependency cache on Vercel's read-only `/var/task` filesystem. The current deployment forces Nargo `HOME`, `XDG_CACHE_HOME`, and `NARGO_HOME` into the proof job's writable `/tmp` work directory.
+- Production proof attempts exposed two real serverless prover blockers: first Nargo tried to lock its git dependency cache on Vercel's read-only `/var/task` filesystem; after the writable-cache fix, Nargo then failed because Vercel's runtime has no `git` binary. Current source fixes both by forcing Nargo cache/home paths into writable `/tmp` locations and by vendoring Noir dependencies as local path dependencies copied into each proof job.
 
 The remaining blocker is the real connected-wallet transfer path:
 
@@ -50,7 +50,7 @@ The remaining blocker is the real connected-wallet transfer path:
 | Submit hash guard | Pass | The transfer UI records success only when submit returns `status: "submitted"` and a real `txHash`. |
 | Rejected proof shape | Pass | Rejected `/api/proofs` responses no longer return a synthetic `proofId`; a proof ID appears only on a ready proof response. |
 | Sidebar/app-shell UI build | Pass | Source and production build include a dedicated StelaKey mark, no visible Dashboard sidebar nav item, a collapsed icon rail for Account/Transfer/Activity, and reduced-motion support for sidebar transitions. |
-| Vercel Nargo cache path | Fixed, needs real wallet retry | Previous live proof failure was `Failed to lock git dependencies cache: Read-only file system`; current code runs Nargo with writable temp cache/home paths. A real connected-wallet proof must be retried to confirm the full proof path. |
+| Vercel Nargo runtime path | Fixed in source, needs real wallet retry | Previous live proof failures were the read-only Nargo cache and then missing runtime `git`. Current source uses writable temp cache/home paths and vendored Noir deps copied into the proof workspace. Local no-git `createProof()` smoke produced proof bytes and public inputs. |
 | Stub endpoint removal | Pass | Standalone relayer 501 `*_NOT_IMPLEMENTED` endpoints were removed; stale RISC0/Circom fallback README files and RISC0 env hint were removed. |
 
 ## PRD Acceptance Criteria
@@ -83,7 +83,7 @@ Done:
 
 Not done:
 
-- Same-origin web transfer routes are deployed and ready, but still need a real connected-wallet proof retry after the Vercel Nargo cache fix before a transfer can be confirmed.
+- Same-origin web transfer routes are deployed and ready, but still need a real connected-wallet proof retry against a deployment containing the Vercel runtime-git fix before a transfer can be confirmed.
 - No real transfer transaction hash can be shown yet.
 
 ## Known Coverage Gaps

@@ -1,6 +1,7 @@
 import nodeCrypto from "node:crypto";
 import { execFile } from "node:child_process";
 import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -25,6 +26,7 @@ const port = Number.parseInt(process.env.PROVER_PORT ?? "3001", 10);
 const origin = process.env.PROVER_ORIGIN ?? "http://localhost:3000";
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const circuitDir = resolve(rootDir, "circuits/stelakey_auth");
+const circuitDepsDir = resolve(circuitDir, "deps");
 const nargoBin = process.env.NARGO_BIN ?? resolve(process.env.HOME ?? "", ".nargo/bin/nargo");
 const bbBin = process.env.BB_BIN ?? resolve(process.env.HOME ?? "", ".bb/bb");
 
@@ -118,7 +120,6 @@ function proofReject(
   return [
     status,
     {
-      proofId: nodeCrypto.randomUUID(),
       status: "rejected",
       errorCode
     }
@@ -149,6 +150,9 @@ async function generateProof(input: {
   try {
     await cp(resolve(circuitDir, "src"), resolve(workDir, "src"), { recursive: true });
     await cp(resolve(circuitDir, "Nargo.toml"), resolve(workDir, "Nargo.toml"));
+    if (existsSync(circuitDepsDir)) {
+      await cp(circuitDepsDir, resolve(workDir, "deps"), { recursive: true });
+    }
 
     const publicKey = secp256k1PublicKeyParts(input.btcPubKey);
     const pubkeyX = hexToBytes(publicKey.xHex);
@@ -353,7 +357,7 @@ app.post("/api/proofs", async (req, res) => {
     res.json(response);
   } catch (error) {
     console.error("[prover] proof generation failed", error);
-    const [status, body] = proofReject("INVALID_SIGNATURE", 500);
+    const [status, body] = proofReject("PROOF_GENERATION_FAILED", 500);
     res.status(status).json(body);
   }
 });

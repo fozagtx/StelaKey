@@ -17,6 +17,10 @@ export type StelaKeyErrorCode =
   | "INVALID_SIGNATURE"
   | "OPERATION_HASH_MISMATCH"
   | "AUTH_PAYLOAD_REQUIRED"
+  | "INVALID_CHALLENGE_REQUEST"
+  | "INVALID_PROOF_REQUEST"
+  | "PROVER_NOT_CONFIGURED"
+  | "PROOF_GENERATION_FAILED"
   | "SMART_ACCOUNT_OWNER_MISMATCH"
   | "STELLAR_TX_FAILED"
   | "RELAYER_NOT_CONFIGURED"
@@ -62,7 +66,7 @@ export type CreateProofRequest = {
 };
 
 export type CreateProofResponse = {
-  proofId: string;
+  proofId?: string;
   status: ProofStatus;
   ownerCommitment?: string;
   nullifier?: string;

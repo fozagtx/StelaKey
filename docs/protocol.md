@@ -212,6 +212,7 @@ If any check fails, the account returns an error and the Stellar action does not
 - Noir circuit computes the BN254 Poseidon owner commitment.
 - Prover API verifies the wallet signature before spending prover time.
 - Prover API runs `nargo compile`, `nargo execute`, and `@aztec/bb.js` UltraHonk proving.
+- Prover API copies vendored Noir `poseidon` and `sha256` path dependencies into the temporary proof workspace, so proof generation does not require runtime git access.
 - Prover API locally verifies the generated proof before returning it.
 - Soroban account contract implements `__check_auth`.
 - Soroban verifier contract stores an UltraHonk verification key and verifies proof bytes plus public inputs.

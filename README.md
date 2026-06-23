@@ -17,6 +17,7 @@ Working now:
 - The Stellar testnet account deployer and UltraHonk verifier contracts are deployed.
 - The Soroban account contract implements `__check_auth`.
 - The prover service verifies an ECDSA Bitcoin message signature, runs the Noir circuit, and generates UltraHonk proof artifacts through `@aztec/bb.js`.
+- The deployed prover bundle no longer depends on runtime git access: Noir `poseidon` and `sha256` dependencies are vendored into the circuit package and copied into each isolated proof job.
 - The transfer API prepares a real Stellar Asset Contract transfer authorization payload and can attach proof data to the Soroban authorization entry before submit.
 - The transfer UI clears stale prepared authorization whenever recipient, amount, asset, or issuer changes.
 - The transfer UI records payment success only when the submit response includes a real Stellar transaction hash.
@@ -221,6 +222,7 @@ Proof stack:
 - `@aztec/bb.js` 0.87.0 for UltraHonk proving and local verification
 - BN254 Poseidon through Noir `poseidon`
 - Noir SHA-256 package for Bitcoin message hashing
+- Vendored Noir path dependencies under `apps/web/prover-circuit/deps` so serverless proof generation does not call `git`
 - Noir secp256k1 ECDSA verification
 - `poseidon-lite` and `@noble/secp256k1` for server-side matching checks
 

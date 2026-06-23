@@ -70,6 +70,7 @@ export class ProverError extends Error {
 
 const appDir = process.cwd();
 const circuitDir = resolve(appDir, "prover-circuit");
+const circuitDepsDir = resolve(circuitDir, "deps");
 const nargoBin = process.env.NARGO_BIN ?? resolve(appDir, ".prover-bin/nargo");
 
 function proverSecret() {
@@ -460,6 +461,9 @@ export async function createProof(input: ProofInput) {
     const nargoEnv = await writableNargoEnv(workDir);
     await cp(resolve(circuitDir, "src"), resolve(workDir, "src"), { recursive: true });
     await cp(resolve(circuitDir, "Nargo.toml"), resolve(workDir, "Nargo.toml"));
+    if (existsSync(circuitDepsDir)) {
+      await cp(circuitDepsDir, resolve(workDir, "deps"), { recursive: true });
+    }
 
     const publicKeyParts = secp256k1PublicKeyParts(btcPubKey);
     const pubkeyX = hexToBytes(publicKeyParts.xHex);

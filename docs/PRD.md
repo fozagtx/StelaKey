@@ -242,6 +242,7 @@ Current implementation status:
 - Transfer preparation errors must not expose internal RPC/preflight labels such as simulation. The UI must say the payment could not be prepared and include a concrete reason when available, such as invalid recipient, missing recipient account, unsupported asset, or Stellar RPC rejection.
 - Proof-generation errors must not expose internal command names such as `PROVER_COMMAND_FAILED`, raw binary paths, or stack details. The UI should say authorization could not be completed, that no transaction was submitted, and, when accurate, that the user can try again after the service records the error.
 - Production proof generation must run Noir/Nargo with writable runtime cache/home paths. A health check that only runs `nargo --version` is not enough to claim proof generation works.
+- Production proof generation must not require a `git` binary at runtime. Noir packages used by the prover must be bundled as local path dependencies and copied into the temporary proof workspace.
 - Transfer `submit` must attach `AuthProof` to the auth entry before signing/sending.
 - The submit path is not live-finished until a real connected wallet signs the transfer challenge and a real Stellar transaction confirms from the browser flow.
 
