@@ -24,6 +24,10 @@ const sourceSecret =
   process.env.STELAKEY_DEPLOYER_SECRET_KEY;
 
 const authLedgerTtl = Number.parseInt(process.env.RELAYER_AUTH_LEDGER_TTL ?? "120", 10);
+const transferTransactionTimeoutSeconds = Number.parseInt(
+  process.env.RELAYER_TRANSFER_TIMEOUT_SECONDS ?? "300",
+  10
+);
 
 type PrepareTransferRequest = {
   accountContractId: string;
@@ -138,6 +142,9 @@ export function transferRelayerReadiness() {
   if (!Number.isSafeInteger(authLedgerTtl) || authLedgerTtl <= 0) {
     missing.push("positive transfer authorization ledger TTL");
   }
+  if (!Number.isSafeInteger(transferTransactionTimeoutSeconds) || transferTransactionTimeoutSeconds <= 0) {
+    missing.push("positive transfer transaction timeout");
+  }
 
   return { config, missing };
 }
@@ -245,6 +252,66 @@ function sha256XdrHex(value: { toXDR: () => Buffer }) {
   return hex32(createHash("sha256").update(value.toXDR()).digest());
 }
 
+function xdrValueToBase64(value: unknown) {
+  if (!value || typeof value !== "object") return undefined;
+  const maybeXdr = value as { toXDR?: (encoding?: "base64") => Buffer | string };
+  if (typeof maybeXdr.toXDR !== "function") return undefined;
+
+  try {
+    const encoded = maybeXdr.toXDR("base64");
+    return typeof encoded === "string" ? encoded : encoded.toString("base64");
+  } catch {
+    return undefined;
+  }
+}
+
+function transactionResultSummary(resultXdr: string | undefined) {
+  if (!resultXdr) return undefined;
+
+  try {
+    const result = xdr.TransactionResult.fromXDR(resultXdr, "base64");
+    return {
+      feeCharged: result.feeCharged().toString(),
+      resultCode: result.result().switch().name,
+      resultCodeValue: result.result().switch().value
+    };
+  } catch (error) {
+    return {
+      parseError: error instanceof Error ? error.message : "unable to parse Stellar transaction result"
+    };
+  }
+}
+
+function rpcFailureSummary(response: unknown) {
+  const summary: Record<string, unknown> = {};
+  if (!response || typeof response !== "object") return summary;
+
+  const record = response as Record<string, unknown>;
+  for (const key of ["status", "hash", "latestLedger", "latestLedgerCloseTime"]) {
+    if (record[key] !== undefined) summary[key] = record[key];
+  }
+
+  const resultXdr =
+    typeof record.errorResultXdr === "string"
+      ? record.errorResultXdr
+      : typeof record.resultXdr === "string"
+        ? record.resultXdr
+        : xdrValueToBase64(record.errorResult) ?? xdrValueToBase64(record.result);
+  if (resultXdr) {
+    summary.resultXdr = resultXdr;
+    summary.transactionResult = transactionResultSummary(resultXdr);
+  }
+
+  if (Array.isArray(record.diagnosticEvents)) {
+    summary.diagnosticEventsXdr = record.diagnosticEvents
+      .map((event) => xdrValueToBase64(event))
+      .filter((event): event is string => Boolean(event));
+  }
+
+  if (typeof record.error === "string") summary.error = record.error;
+  return summary;
+}
+
 function sortedJson(value: unknown): string {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(sortedJson).join(",")}]`;
@@ -337,11 +404,25 @@ function invokeHostFunctionOperation(transaction: Transaction) {
   return operation;
 }
 
+function sorobanDataFor(transaction: Transaction) {
+  const envelope = transaction.toEnvelope();
+  if (envelope.switch().value !== xdr.EnvelopeType.envelopeTypeTx().value) return undefined;
+  return envelope.v1().tx().ext().value() ?? undefined;
+}
+
+function classicFeeFor(transaction: Transaction, sorobanData: xdr.SorobanTransactionData) {
+  const totalFee = BigInt(transaction.fee);
+  const resourceFee = sorobanData.resourceFee().toBigInt();
+  if (totalFee > resourceFee) return (totalFee - resourceFee).toString();
+  return BASE_FEE;
+}
+
 async function waitForTransaction(server: StellarRpcServer, txHash: string) {
   for (let attempt = 0; attempt < 24; attempt += 1) {
     const result = await server.getTransaction(txHash);
     if (result.status === "SUCCESS") return result;
     if (result.status === "FAILED") {
+      console.error("stellar_transfer_confirmation_failed", rpcFailureSummary(result));
       throw new TransferRelayerError(502, "STELLAR_TRANSFER_FAILED", "Stellar rejected the submitted transfer transaction.");
     }
     await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -380,7 +461,7 @@ export async function prepareTransferAuthorization(body: unknown) {
     networkPassphrase: config.networkPassphrase
   })
     .addOperation(transferOperation)
-    .setTimeout(60)
+    .setTimeout(transferTransactionTimeoutSeconds)
     .build();
 
   const rawPreflight = await server._simulateTransaction(transaction, undefined, "record");
@@ -514,10 +595,21 @@ export async function submitAuthorizedTransfer(body: unknown) {
 
   const signedAuthEntries = [...authEntries];
   signedAuthEntries[request.authEntryIndex] = signedEntry;
-  const transactionBuilder = TransactionBuilder.cloneFrom(transaction, {
+
+  const preparedSorobanData = sorobanDataFor(transaction);
+  if (!preparedSorobanData) {
+    throw new TransferRelayerError(
+      400,
+      "PREPARED_TRANSACTION_MISSING_SOROBAN_DATA",
+      "Prepared transfer transaction is missing Soroban simulation data."
+    );
+  }
+
+  const freshSourceAccount = await server.getAccount(sourceKeypair.publicKey());
+  const transactionBuilder = new TransactionBuilder(freshSourceAccount, {
+    fee: classicFeeFor(transaction, preparedSorobanData),
     networkPassphrase: config.networkPassphrase
   });
-  transactionBuilder.clearOperations();
   transactionBuilder.addOperation(
     Operation.invokeHostFunction({
       func: operation.func,
@@ -525,11 +617,15 @@ export async function submitAuthorizedTransfer(body: unknown) {
       ...(operation.source ? { source: operation.source } : {})
     })
   );
+  transactionBuilder
+    .setTimeout(transferTransactionTimeoutSeconds)
+    .setSorobanData(preparedSorobanData);
 
   const signedTransaction = transactionBuilder.build();
   signedTransaction.sign(sourceKeypair);
   const submitted = await server.sendTransaction(signedTransaction);
   if (submitted.status === "ERROR") {
+    console.error("stellar_transfer_send_rejected", rpcFailureSummary(submitted));
     throw new TransferRelayerError(502, "STELLAR_TRANSFER_REJECTED", "Stellar rejected the transfer transaction before confirmation.");
   }
   if (submitted.status !== "PENDING" && submitted.status !== "DUPLICATE") {

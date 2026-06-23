@@ -54,7 +54,8 @@ const config = {
     process.env.STELLAR_RELAYER_SECRET_KEY ??
     process.env.STELLAR_DEPLOYER_SECRET_KEY ??
     process.env.STELAKEY_DEPLOYER_SECRET_KEY,
-  authLedgerTtl: Number.parseInt(process.env.RELAYER_AUTH_LEDGER_TTL ?? "120", 10)
+  authLedgerTtl: Number.parseInt(process.env.RELAYER_AUTH_LEDGER_TTL ?? "120", 10),
+  transferTransactionTimeoutSeconds: Number.parseInt(process.env.RELAYER_TRANSFER_TIMEOUT_SECONDS ?? "300", 10)
 };
 
 class RelayerError extends Error {
@@ -96,6 +97,12 @@ function missingConfig() {
   if (!config.sourceSecret) missing.push("relayer signer");
   if (!Number.isSafeInteger(config.authLedgerTtl) || config.authLedgerTtl <= 0) {
     missing.push("positive relayer auth ledger TTL");
+  }
+  if (
+    !Number.isSafeInteger(config.transferTransactionTimeoutSeconds) ||
+    config.transferTransactionTimeoutSeconds <= 0
+  ) {
+    missing.push("positive transfer transaction timeout");
   }
   return missing;
 }
@@ -279,6 +286,19 @@ function invokeHostFunctionOperation(transaction: Transaction) {
   return operation;
 }
 
+function sorobanDataFor(transaction: Transaction) {
+  const envelope = transaction.toEnvelope();
+  if (envelope.switch().value !== xdr.EnvelopeType.envelopeTypeTx().value) return undefined;
+  return envelope.v1().tx().ext().value() ?? undefined;
+}
+
+function classicFeeFor(transaction: Transaction, sorobanData: xdr.SorobanTransactionData) {
+  const totalFee = BigInt(transaction.fee);
+  const resourceFee = sorobanData.resourceFee().toBigInt();
+  if (totalFee > resourceFee) return (totalFee - resourceFee).toString();
+  return BASE_FEE;
+}
+
 async function waitForTransaction(server: StellarRpcServer, txHash: string) {
   for (let attempt = 0; attempt < 24; attempt += 1) {
     const result = await server.getTransaction(txHash);
@@ -325,7 +345,7 @@ async function prepareTransfer(body: unknown) {
     networkPassphrase: config.networkPassphrase
   })
     .addOperation(transferOperation)
-    .setTimeout(60)
+    .setTimeout(config.transferTransactionTimeoutSeconds)
     .build();
 
   const rawPreflight = await server._simulateTransaction(transaction, undefined, "record");
@@ -458,10 +478,21 @@ async function submitTransfer(body: unknown) {
 
   const signedAuthEntries = [...authEntries];
   signedAuthEntries[request.authEntryIndex] = signedEntry;
-  const transactionBuilder = TransactionBuilder.cloneFrom(transaction, {
+
+  const preparedSorobanData = sorobanDataFor(transaction);
+  if (!preparedSorobanData) {
+    throw new RelayerError(
+      400,
+      "PREPARED_TRANSACTION_MISSING_SOROBAN_DATA",
+      "Prepared transfer transaction is missing Soroban simulation data."
+    );
+  }
+
+  const freshSourceAccount = await server.getAccount(sourceKeypair.publicKey());
+  const transactionBuilder = new TransactionBuilder(freshSourceAccount, {
+    fee: classicFeeFor(transaction, preparedSorobanData),
     networkPassphrase: config.networkPassphrase
   });
-  transactionBuilder.clearOperations();
   transactionBuilder.addOperation(
     Operation.invokeHostFunction({
       func: operation.func,
@@ -469,11 +500,22 @@ async function submitTransfer(body: unknown) {
       ...(operation.source ? { source: operation.source } : {})
     })
   );
+  transactionBuilder
+    .setTimeout(config.transferTransactionTimeoutSeconds)
+    .setSorobanData(preparedSorobanData);
 
   const signedTransaction = transactionBuilder.build();
   signedTransaction.sign(sourceKeypair);
   const submitted = await server.sendTransaction(signedTransaction);
   if (submitted.status === "ERROR") {
+    console.error("stellar_transfer_send_rejected", {
+      status: submitted.status,
+      hash: submitted.hash,
+      errorResultXdr:
+        "errorResultXdr" in submitted && typeof submitted.errorResultXdr === "string"
+          ? submitted.errorResultXdr
+          : undefined
+    });
     throw new RelayerError(502, "STELLAR_TRANSFER_REJECTED", "Stellar rejected the transfer transaction before confirmation.");
   }
   if (submitted.status !== "PENDING" && submitted.status !== "DUPLICATE") {

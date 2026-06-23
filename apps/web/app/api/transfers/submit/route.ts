@@ -11,6 +11,9 @@ function publicSubmitMessage(error: TransferRelayerError) {
   if (error.errorCode === "STELLAR_TRANSFER_FAILED") {
     return "Stellar rejected the payment transaction. No confirmed transaction hash is available.";
   }
+  if (error.errorCode === "STELLAR_TRANSFER_REJECTED") {
+    return "Stellar rejected the payment transaction before confirmation. No transaction was submitted.";
+  }
   if (error.errorCode === "TRANSFER_CONFIRMATION_TIMEOUT") {
     return "Stellar accepted the payment request, but confirmation timed out. Check account activity before trying again.";
   }
@@ -23,6 +26,11 @@ export async function POST(request: Request) {
     return NextResponse.json(submitted);
   } catch (error) {
     if (error instanceof TransferRelayerError) {
+      console.error("submit_transfer_rejected", {
+        errorCode: error.errorCode,
+        status: error.status,
+        message: error.message
+      });
       return NextResponse.json(
         {
           status: "rejected",
