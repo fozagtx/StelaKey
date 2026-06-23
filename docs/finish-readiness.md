@@ -12,8 +12,9 @@ The current build is a credible hackathon MVP foundation:
 - Connected-wallet account setup is wired to the live Stellar testnet account deployer.
 - The live same-origin prover route reports ready and is wired to Noir/UltraHonk.
 - The account contract implements `__check_auth` binding checks.
-- Production deployment `dpl_9QahgGvzqxBWw9VubyJ76aq7uo2G` is live at `https://web-aotq53wr2-fawuzantechs-projects.vercel.app`.
+- Production deployment `dpl_4LzQWcR4BaBG1yXLrChJRS2w85kQ` is live at `https://web-9hurfc9il-fawuzantechs-projects.vercel.app`.
 - Public aliases `https://stelakey.vercel.app` and `https://stelakey-fawuzan.vercel.app` were pointed at that deployment on June 23, 2026.
+- Latest app-shell UI pass removes the visible Dashboard sidebar item, keeps the collapsed sidebar as a clickable icon rail, adds a dedicated StelaKey mark, tightens Transfer spacing, and removes duplicate protected-page header labels.
 
 The remaining blocker is the real connected-wallet transfer path:
 
@@ -47,6 +48,7 @@ The remaining blocker is the real connected-wallet transfer path:
 | Transfer stale-payload guard | Pass | Changing recipient, amount, asset, or issuer clears the prepared challenge, signature, proof, and submitted state before another submit can happen. |
 | Submit hash guard | Pass | The transfer UI records success only when submit returns `status: "submitted"` and a real `txHash`. |
 | Rejected proof shape | Pass | Rejected `/api/proofs` responses no longer return a synthetic `proofId`; a proof ID appears only on a ready proof response. |
+| Sidebar/app-shell UI build | Pass | Source and production build include a dedicated StelaKey mark, no visible Dashboard sidebar nav item, a collapsed icon rail for Account/Transfer/Activity, and reduced-motion support for sidebar transitions. |
 
 ## PRD Acceptance Criteria
 

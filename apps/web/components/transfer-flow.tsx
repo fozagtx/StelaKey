@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -443,8 +442,7 @@ export function TransferFlow() {
       />
       <Card className="transfer-card">
         <CardHeader className="compact-card-header">
-          <Badge variant="outline" className="soft-badge">Transfer</Badge>
-          <CardTitle>Authorize a Stellar payment</CardTitle>
+          <CardTitle>Authorize payment</CardTitle>
         </CardHeader>
         <CardContent className="compact-card-content">
         <div className="intent-strip">
@@ -570,7 +568,6 @@ export function TransferFlow() {
 
       <Card className="status-card">
         <CardHeader className="compact-card-header">
-          <Badge variant="outline" className="soft-badge">Status</Badge>
           <CardTitle>Payment status</CardTitle>
         </CardHeader>
         <CardContent className="compact-card-content">

@@ -253,13 +253,13 @@ export function AccountSetup() {
     ? wallet.provider.slice(0, 1).toUpperCase() + wallet.provider.slice(1)
     : "Bitcoin";
   const accountTitle = busy
-    ? "Setting up your account"
+    ? "Setting up account"
     : accountContractId
-      ? "Account"
+      ? "StelaKey account"
       : statusLoading
-        ? "Checking your account"
+        ? "Checking account"
         : status?.ready
-          ? "Create your account"
+          ? "Create StelaKey account"
           : "Setup unavailable";
   const accountState = accountContractId
     ? account?.existing
@@ -295,7 +295,6 @@ export function AccountSetup() {
             <ProductIcon name="account" size={50} />
           </span>
           <div>
-            <Badge variant="outline" className="soft-badge">StelaKey account</Badge>
             <CardTitle>{accountTitle}</CardTitle>
           </div>
           <Button type="button" variant="secondary" size="sm" onClick={switchWallet}>

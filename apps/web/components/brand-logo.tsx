@@ -15,6 +15,37 @@ function svgA11y(decorative: boolean, label: string) {
   };
 }
 
+export function StelaKeyMark({
+  className,
+  decorative = true,
+  label = "StelaKey",
+  size = 40
+}: BrandLogoProps) {
+  return (
+    <svg
+      {...svgA11y(decorative, label)}
+      className={cn("brand-logo-svg stelakey-mark", className)}
+      height={size}
+      viewBox="0 0 64 64"
+      width={size}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <rect x="7" y="7" width="50" height="50" rx="17" fill="#F9C933" stroke="#111111" strokeWidth="4" />
+      <circle cx="29" cy="30" r="14" fill="#7FC5F6" stroke="#111111" strokeWidth="4" />
+      <circle cx="29" cy="30" r="5" fill="#F5F5F3" stroke="#111111" strokeWidth="3" />
+      <path
+        d="M39 39h9m-4.5 0v7"
+        fill="none"
+        stroke="#111111"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="4"
+      />
+      <circle cx="45.5" cy="44.5" r="4.5" fill="#53D36A" stroke="#111111" strokeWidth="3" />
+    </svg>
+  );
+}
+
 export function BitcoinLogo({
   className,
   decorative = true,

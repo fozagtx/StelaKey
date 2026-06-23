@@ -24,15 +24,15 @@ import {
   SidebarMenuItem,
   SidebarProvider
 } from "@/components/ui/sidebar";
-import { ProductIcon } from "./product-icon";
+import { StelaKeyMark } from "./brand-logo";
+import { ProductIcon, type ProductIconName } from "./product-icon";
 import { WalletConnectButton } from "./wallet-connect-button";
 import { compact, useWalletSession } from "./wallet-session";
 
-const nav: Array<{ href: string; label: string }> = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/account", label: "Account" },
-  { href: "/transfer", label: "Transfer" },
-  { href: "/activity", label: "Activity" }
+const nav: Array<{ href: string; label: string; icon: ProductIconName }> = [
+  { href: "/account", label: "Account", icon: "account" },
+  { href: "/transfer", label: "Transfer", icon: "transfer" },
+  { href: "/activity", label: "Activity", icon: "activity" }
 ];
 
 const SIDEBAR_WIDTH_KEY = "stelakey:sidebar-width";
@@ -203,6 +203,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </button>
         <SidebarHeader>
           <Link className="sidebar-brand" href="/dashboard" aria-label="StelaKey dashboard">
+            <StelaKeyMark size={34} />
             <span className="brand">
               StelaKey
             </span>
@@ -215,7 +216,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 {nav.map((item) => (
                   <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton asChild className={pathname === item.href ? "active" : ""}>
-                      <Link href={item.href}>
+                      <Link href={item.href} aria-current={pathname === item.href ? "page" : undefined} aria-label={item.label} title={item.label}>
+                        <ProductIcon name={item.icon} size={20} strokeWidth={2} />
                         <span>{item.label}</span>
                       </Link>
                     </SidebarMenuButton>

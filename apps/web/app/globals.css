@@ -702,6 +702,7 @@ h3 {
   margin: 0;
   padding: 14px;
   background: var(--cream);
+  transition: grid-template-columns 240ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .sidebar-provider .soft-badge {
@@ -732,6 +733,11 @@ h3 {
   padding: 16px 12px;
   background: var(--white);
   overflow: visible;
+  transform-origin: left center;
+  transition:
+    border-color 180ms cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 180ms cubic-bezier(0.4, 0, 0.2, 1),
+    transform 240ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .sidebar.collapsed {
@@ -739,8 +745,6 @@ h3 {
   padding: 12px 8px;
 }
 
-.sidebar.collapsed .sidebar-header,
-.sidebar.collapsed .sidebar-content,
 .sidebar.collapsed .sidebar-wallet,
 .sidebar.collapsed .sidebar-resize-handle {
   display: none;
@@ -761,12 +765,17 @@ h3 {
   background: var(--white);
   color: var(--teal);
   cursor: pointer;
+  transition:
+    background-color 160ms cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 160ms cubic-bezier(0.4, 0, 0.2, 1),
+    transform 160ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .sidebar-toggle-button:hover,
 .sidebar-toggle-button:focus-visible {
   border-color: var(--teal);
   background: var(--app-surface-blue);
+  transform: scale(1.04);
 }
 
 .sidebar-toggle-button:focus-visible {
@@ -783,14 +792,45 @@ h3 {
   align-items: center;
   gap: 8px;
   color: var(--ink);
+  min-width: 0;
+  text-decoration: none;
 }
 
 .sidebar-brand .brand {
+  display: inline-block;
   font-size: 1.42rem;
+  white-space: nowrap;
+  transition:
+    opacity 160ms cubic-bezier(0.4, 0, 0.2, 1),
+    transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sidebar.collapsed .sidebar-header {
+  width: 100%;
+}
+
+.sidebar.collapsed .sidebar-brand {
+  width: 100%;
+  justify-content: center;
+}
+
+.sidebar.collapsed .sidebar-brand .brand {
+  width: 0;
+  opacity: 0;
+  overflow: hidden;
+  transform: translateX(-6px);
 }
 
 .sidebar-content {
   margin-top: 18px;
+  transition:
+    opacity 180ms cubic-bezier(0.4, 0, 0.2, 1),
+    transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sidebar.collapsed .sidebar-content {
+  width: 100%;
+  margin-top: 42px;
 }
 
 .sidebar-group,
@@ -811,18 +851,62 @@ h3 {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
   border: 0;
   border-radius: 14px;
   padding: 8px 10px;
   color: var(--teal);
   font-size: 0.95rem;
   font-weight: 850;
+  transition:
+    background-color 160ms cubic-bezier(0.4, 0, 0.2, 1),
+    color 160ms cubic-bezier(0.4, 0, 0.2, 1),
+    transform 160ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.sidebar-menu-button svg {
+  flex: 0 0 auto;
+}
+
+.sidebar-menu-button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition:
+    opacity 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sidebar.collapsed .sidebar-menu {
+  justify-items: center;
+  gap: 8px;
+}
+
+.sidebar.collapsed .sidebar-menu-button {
+  width: 42px;
+  min-height: 42px;
+  justify-content: center;
+  gap: 0;
+  padding: 0;
+  border-radius: 16px;
+}
+
+.sidebar.collapsed .sidebar-menu-button span {
+  width: 0;
+  opacity: 0;
+  transform: translateX(-5px);
 }
 
 .sidebar-menu-button.active,
 .sidebar-menu-button:hover {
   background: var(--app-surface-blue-strong);
   color: var(--teal);
+  transform: translateX(2px);
+}
+
+.sidebar.collapsed .sidebar-menu-button.active,
+.sidebar.collapsed .sidebar-menu-button:hover {
+  transform: scale(1.05);
 }
 
 .app-main {
@@ -1016,7 +1100,7 @@ h3 {
 }
 
 .route-grid {
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  grid-template-columns: minmax(0, 1fr) minmax(250px, 310px);
   align-items: start;
 }
 
@@ -1039,7 +1123,7 @@ h3 {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .account-viewer-header > :not([hidden]) ~ :not([hidden]) {
@@ -1047,8 +1131,8 @@ h3 {
 }
 
 .account-viewer-header h3 {
-  margin-top: 8px;
-  font-size: clamp(1.7rem, 3vw, 2.6rem);
+  margin-top: 0;
+  font-size: clamp(1.55rem, 2.4vw, 2.15rem);
   line-height: 1;
 }
 
@@ -1213,7 +1297,8 @@ h3 {
 
 .transfer-grid {
   height: calc(100svh - 28px);
-  min-height: 560px;
+  min-height: 520px;
+  gap: 8px;
   overflow: hidden;
   align-items: stretch;
 }
@@ -1226,79 +1311,81 @@ h3 {
 }
 
 .transfer-grid .compact-card-header {
-  gap: 6px;
-  padding: 12px 14px 8px;
+  gap: 0;
+  padding: 10px 12px 6px;
 }
 
 .transfer-grid .compact-card-header h3 {
-  font-size: clamp(1.35rem, 2vw, 1.85rem);
+  font-size: clamp(1.22rem, 1.65vw, 1.55rem);
   line-height: 1;
 }
 
 .transfer-grid .compact-card-content {
-  padding: 0 14px 14px;
+  padding: 0 12px 12px;
 }
 
 .transfer-grid .intent-strip {
-  grid-template-columns: 150px minmax(0, 1fr);
+  grid-template-columns: 132px minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
-  margin-top: 7px;
-  padding: 8px 10px;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 7px 9px;
 }
 
 .transfer-grid .intent-strip span {
-  font-size: 0.76rem;
+  font-size: 0.71rem;
 }
 
 .transfer-grid .intent-strip strong {
-  font-size: 0.94rem;
+  font-size: 0.86rem;
 }
 
 .transfer-grid label {
-  gap: 5px;
-  margin-top: 7px;
+  gap: 3px;
+  margin-top: 6px;
+  font-size: 0.86rem;
 }
 
 .transfer-grid input {
-  min-height: 34px;
-  padding-block: 5px;
+  min-height: 32px;
+  padding-block: 4px;
 }
 
 .transfer-grid .split {
-  margin-top: 7px;
+  gap: 7px;
+  margin-top: 6px;
 }
 
 .transfer-grid .proof-status {
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 7px;
-  margin-top: 7px;
+  gap: 6px;
+  margin-top: 6px;
 }
 
 .transfer-grid .proof-status > div {
-  gap: 4px;
-  padding: 8px;
+  gap: 3px;
+  padding: 7px;
 }
 
 .transfer-grid .proof-status span {
-  font-size: 0.72rem;
+  font-size: 0.66rem;
 }
 
 .transfer-grid .proof-status strong {
-  font-size: 0.84rem;
+  font-size: 0.78rem;
 }
 
 .transfer-grid .button-row {
-  gap: 7px;
-  margin-top: 9px;
+  gap: 6px;
+  margin-top: 8px;
 }
 
 .transfer-grid .activity-list {
-  gap: 7px;
+  gap: 6px;
 }
 
 .transfer-grid .activity-list li {
-  padding: 8px 10px;
+  padding: 8px 9px;
 }
 
 .activity-list,
@@ -1620,5 +1707,16 @@ input {
   .desktop-experience-gate p {
     color: var(--muted-foreground);
     line-height: 1.5;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
   }
 }

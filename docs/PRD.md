@@ -172,6 +172,11 @@ Required:
 - Protected app sidebar must be a detached rounded panel with a visible page gutter. It must not be glued flush to the viewport edge or span as a square strip.
 - Protected app sidebar must be horizontally resizable on desktop, with width stored locally for the browser session/user.
 - Protected app sidebar must have a visible icon button to collapse and reopen the sidebar. A thin drag strip alone is not enough as the only visible control.
+- Collapsed sidebar must remain useful: show a clickable icon rail for Account, Transfer, and Activity instead of a blank rail.
+- Sidebar route navigation must not include a visible Dashboard item. The brand mark may link back to `/dashboard`.
+- Sidebar brand must use a dedicated StelaKey mark next to the StelaKey wordmark when expanded, and the mark only when collapsed. Do not combine Bitcoin and Stellar official logos into the StelaKey app logo.
+- Sidebar open/close motion must be under 300ms, use a custom easing curve, and respect `prefers-reduced-motion`.
+- Protected route headers must avoid duplicate label/title stacks such as "StelaKey account" followed by "Account" or "Transfer" followed by another transfer heading.
 - Wallet identity chip.
 - Account status.
 - Proof path status.
