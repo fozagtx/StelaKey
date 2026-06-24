@@ -465,13 +465,6 @@ function sorobanDataFor(transaction: Transaction) {
   return envelope.v1().tx().ext().value() ?? undefined;
 }
 
-function classicFeeFor(transaction: Transaction, sorobanData: xdr.SorobanTransactionData) {
-  const totalFee = BigInt(transaction.fee);
-  const resourceFee = sorobanData.resourceFee().toBigInt();
-  if (totalFee > resourceFee) return (totalFee - resourceFee).toString();
-  return BASE_FEE;
-}
-
 async function waitForTransaction(server: StellarRpcServer, txHash: string) {
   for (let attempt = 0; attempt < 24; attempt += 1) {
     const result = await server.getTransaction(txHash);
@@ -651,8 +644,7 @@ export async function submitAuthorizedTransfer(body: unknown) {
   const signedAuthEntries = [...authEntries];
   signedAuthEntries[request.authEntryIndex] = signedEntry;
 
-  const preparedSorobanData = sorobanDataFor(transaction);
-  if (!preparedSorobanData) {
+  if (!sorobanDataFor(transaction)) {
     throw new TransferRelayerError(
       400,
       "PREPARED_TRANSACTION_MISSING_SOROBAN_DATA",
@@ -661,22 +653,46 @@ export async function submitAuthorizedTransfer(body: unknown) {
   }
 
   const freshSourceAccount = await server.getAccount(sourceKeypair.publicKey());
-  const transactionBuilder = new TransactionBuilder(freshSourceAccount, {
-    fee: classicFeeFor(transaction, preparedSorobanData),
+  const signedAuthDraft = new TransactionBuilder(freshSourceAccount, {
+    fee: BASE_FEE,
     networkPassphrase: config.networkPassphrase
-  });
-  transactionBuilder.addOperation(
-    Operation.invokeHostFunction({
-      func: operation.func,
-      auth: signedAuthEntries,
-      ...(operation.source ? { source: operation.source } : {})
-    })
-  );
-  transactionBuilder
+  })
+    .addOperation(
+      Operation.invokeHostFunction({
+        func: operation.func,
+        auth: signedAuthEntries,
+        ...(operation.source ? { source: operation.source } : {})
+      })
+    )
     .setTimeout(transferTransactionTimeoutSeconds)
-    .setSorobanData(preparedSorobanData);
+    .build();
 
-  const signedTransaction = transactionBuilder.build();
+  const signedAuthPreflight = await server._simulateTransaction(signedAuthDraft);
+  const signedAuthSimulation = parseRawSimulation(signedAuthPreflight);
+  if ("error" in signedAuthSimulation) {
+    console.error("stellar_transfer_signed_auth_preflight_failed", {
+      error: signedAuthSimulation.error,
+      latestLedger: signedAuthSimulation.latestLedger,
+      events: signedAuthSimulation.events?.map((event) => xdrValueToBase64(event)).filter(Boolean)
+    });
+    throw new TransferRelayerError(
+      502,
+      "STELLAR_TRANSFER_PREFLIGHT_FAILED",
+      "Stellar rejected the proof-bearing payment preflight. No transaction was submitted."
+    );
+  }
+
+  const assembledSignedTransaction = assembleTransaction(signedAuthDraft, signedAuthPreflight).build();
+  const assembledSorobanData = sorobanDataFor(assembledSignedTransaction);
+  if (!assembledSorobanData) {
+    throw new TransferRelayerError(
+      502,
+      "STELLAR_TRANSFER_ASSEMBLY_FAILED",
+      "Stellar did not return Soroban resource data for the proof-bearing payment."
+    );
+  }
+
+  const signedTransaction = assembledSignedTransaction;
   signedTransaction.sign(sourceKeypair);
   const submitted = await server.sendTransaction(signedTransaction);
   if (submitted.status === "ERROR") {
