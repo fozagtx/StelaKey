@@ -13,8 +13,8 @@ The current build is a credible hackathon MVP foundation:
 - The live same-origin prover route reports ready and is wired to Noir/UltraHonk.
 - The account contract implements `__check_auth` binding checks.
 - Production deployment `dpl_HLhjt9HWceuZ3JVPTgk47FvatoPz` is live at `https://web-fwc683k94-fawuzantechs-projects.vercel.app`.
-- Public aliases `https://stelakey.vercel.app` and `https://stelakey-fawuzan.vercel.app` point to deployment `dpl_HLhjt9HWceuZ3JVPTgk47FvatoPz`.
-- Public aliases `https://stelakey.vercel.app` and `https://stelakey-fawuzan.vercel.app` were pointed at that deployment on June 23, 2026.
+- Public production URL `https://stelakey.vercel.app` points to deployment `dpl_HLhjt9HWceuZ3JVPTgk47FvatoPz`.
+- Public production URL `https://stelakey.vercel.app` was pointed at that deployment on June 23, 2026.
 - Latest app-shell UI pass removes the visible Dashboard sidebar item, keeps the collapsed sidebar as a clickable icon rail, removes unwanted sidebar hover/click movement animations, adds a dedicated StelaKey mark, tightens Transfer spacing, and removes duplicate protected-page header labels.
 - Production proof attempts exposed several real serverless prover blockers: Nargo cache writes, missing runtime `git`, bb.js CRS path creation, native `bb` requiring `GLIBC_2.38`, and missing bb.js WASM/worker files in the function bundle. Current source fixes these by forcing Nargo cache/home paths into writable temporary directories, vendoring Noir dependencies as local path dependencies copied into each proof job, using the `@aztec/bb.js` WASM backend on Vercel, and tracing the exact bb.js pnpm runtime files needed by `/api/proofs` and `/api/prover/health`.
 
@@ -36,7 +36,7 @@ The remaining blocker is the real connected-wallet transfer path:
 | `cargo test --workspace` | Pass | Default Rust tests pass. |
 | `bash scripts/build-circuit.sh` | Pass | Noir compiles with known SHA-256 Brillig warnings; script exits without generating proof artifacts because no real `Prover.toml` witness is present. |
 | Local bb.js proof smoke | Pass | `PROVER_BACKEND=bbjs createProof()` with a throwaway local key returned `status: ready`, proof hex length `29186`, and public-input hex length `6978` (`3488` bytes), matching the account contract public-input size. No chain state was created. |
-| Live prover readiness | Pass | `https://stelakey.vercel.app/api/prover/health` and `https://stelakey-fawuzan.vercel.app/api/prover/health` report `ready` with `noir-ultrahonk-bbjs-wasm`, `nargo version = 1.0.0-beta.9`, and no missing config on deployment `dpl_HLhjt9HWceuZ3JVPTgk47FvatoPz`. |
+| Live prover readiness | Pass | `https://stelakey.vercel.app/api/prover/health` reports `ready` with `noir-ultrahonk-bbjs-wasm`, `nargo version = 1.0.0-beta.9`, and no missing config on deployment `dpl_HLhjt9HWceuZ3JVPTgk47FvatoPz`. |
 | Live `https://stelakey.vercel.app` | Pass | Public landing responds with the user-facing wallet-to-Stellar promise. |
 | Live protected routes | Inconclusive | Static terminal fetches return 200, but protected-route gating needs a hydrated browser session to verify. Browser control was not used. |
 | Live account deploy readiness | Pass | `/api/accounts/deploy` reports ready with deployer, verifier, and fixed account WASM hash. |
