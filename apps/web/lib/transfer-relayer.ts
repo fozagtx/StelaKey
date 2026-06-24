@@ -265,16 +265,60 @@ function xdrValueToBase64(value: unknown) {
   }
 }
 
+function xdrSwitchSummary(value: unknown) {
+  if (!value || typeof value !== "object") return undefined;
+  const maybeSwitchable = value as { switch?: () => { name?: string; value?: unknown } };
+  if (typeof maybeSwitchable.switch !== "function") return undefined;
+
+  try {
+    const switchValue = maybeSwitchable.switch();
+    return {
+      name: switchValue.name,
+      value: switchValue.value
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function operationResultSummary(value: unknown) {
+  if (!value || typeof value !== "object") return undefined;
+  const summary: Record<string, unknown> = {};
+  const operationResult = value as {
+    code?: () => unknown;
+    switch?: () => { name?: string; value?: unknown };
+    tr?: () => unknown;
+  };
+
+  const code = typeof operationResult.code === "function" ? xdrSwitchSummary(operationResult.code()) : undefined;
+  const result = xdrSwitchSummary(operationResult);
+  const tr = typeof operationResult.tr === "function" ? xdrSwitchSummary(operationResult.tr()) : undefined;
+
+  if (code) summary.code = code;
+  if (result) summary.result = result;
+  if (tr) summary.tr = tr;
+
+  return Object.keys(summary).length > 0 ? summary : undefined;
+}
+
 function transactionResultSummary(resultXdr: string | undefined) {
   if (!resultXdr) return undefined;
 
   try {
     const result = xdr.TransactionResult.fromXDR(resultXdr, "base64");
-    return {
+    const txResult = result.result();
+    const summary: Record<string, unknown> = {
       feeCharged: result.feeCharged().toString(),
-      resultCode: result.result().switch().name,
-      resultCodeValue: result.result().switch().value
+      resultCode: txResult.switch().name,
+      resultCodeValue: txResult.switch().value
     };
+    const results = (txResult as unknown as { results?: () => unknown }).results?.();
+    if (Array.isArray(results)) {
+      summary.operationResults = results
+        .map((item) => operationResultSummary(item))
+        .filter((item): item is Record<string, unknown> => Boolean(item));
+    }
+    return summary;
   } catch (error) {
     return {
       parseError: error instanceof Error ? error.message : "unable to parse Stellar transaction result"
@@ -296,15 +340,26 @@ function rpcFailureSummary(response: unknown) {
       ? record.errorResultXdr
       : typeof record.resultXdr === "string"
         ? record.resultXdr
-        : xdrValueToBase64(record.errorResult) ?? xdrValueToBase64(record.result);
+        : xdrValueToBase64(record.errorResult) ??
+          xdrValueToBase64(record.resultXdr) ??
+          xdrValueToBase64(record.result);
   if (resultXdr) {
     summary.resultXdr = resultXdr;
     summary.transactionResult = transactionResultSummary(resultXdr);
   }
 
-  if (Array.isArray(record.diagnosticEvents)) {
-    summary.diagnosticEventsXdr = record.diagnosticEvents
-      .map((event) => xdrValueToBase64(event))
+  const resultMetaXdr =
+    typeof record.resultMetaXdr === "string" ? record.resultMetaXdr : xdrValueToBase64(record.resultMetaXdr);
+  if (resultMetaXdr) summary.resultMetaXdr = resultMetaXdr;
+
+  const diagnosticEvents = Array.isArray(record.diagnosticEventsXdr)
+    ? record.diagnosticEventsXdr
+    : Array.isArray(record.diagnosticEvents)
+      ? record.diagnosticEvents
+      : [];
+  if (diagnosticEvents.length > 0) {
+    summary.diagnosticEventsXdr = diagnosticEvents
+      .map((event) => (typeof event === "string" ? event : xdrValueToBase64(event)))
       .filter((event): event is string => Boolean(event));
   }
 
@@ -422,7 +477,7 @@ async function waitForTransaction(server: StellarRpcServer, txHash: string) {
     const result = await server.getTransaction(txHash);
     if (result.status === "SUCCESS") return result;
     if (result.status === "FAILED") {
-      console.error("stellar_transfer_confirmation_failed", rpcFailureSummary(result));
+      console.error("stellar_transfer_confirmation_failed", { txHash, ...rpcFailureSummary(result) });
       throw new TransferRelayerError(502, "STELLAR_TRANSFER_FAILED", "Stellar rejected the submitted transfer transaction.");
     }
     await new Promise((resolve) => setTimeout(resolve, 1000));

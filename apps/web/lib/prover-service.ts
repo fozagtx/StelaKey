@@ -6,7 +6,6 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import * as secp from "@noble/secp256k1";
-import { UltraHonkBackend } from "@aztec/bb.js";
 import {
   bitcoinSignedMessageHash,
   bitcoinSignedMessageHashHex,
@@ -72,6 +71,19 @@ const appDir = process.cwd();
 const circuitDir = resolve(appDir, "prover-circuit");
 const circuitDepsDir = resolve(circuitDir, "deps");
 const nargoBin = process.env.NARGO_BIN ?? resolve(appDir, ".prover-bin/nargo");
+const bbBin = process.env.BB_BIN ?? resolve(appDir, ".prover-bin/bb");
+const bbJsCliBin = process.env.BBJS_CLI_BIN ?? resolve(appDir, "node_modules/@aztec/bb.js/dest/node/main.js");
+const PUBLIC_INPUT_BYTES = 3488;
+
+function useBbJsBackend() {
+  if (process.env.PROVER_BACKEND === "bbjs") return true;
+  if (process.env.PROVER_BACKEND === "bb-cli") return false;
+  return process.env.VERCEL === "1" || process.env.PROVER_NATIVE_BB === "0";
+}
+
+function proofBackendLabel() {
+  return useBbJsBackend() ? "noir-ultrahonk-bbjs-wasm" : "noir-ultrahonk-bb-cli";
+}
 
 function proverSecret() {
   return process.env.PROVER_HMAC_SECRET ?? "stelakey-local-development-prover-secret";
@@ -203,6 +215,20 @@ function commandFailureDetail(error: unknown) {
   return parts.length > 0 ? parts.join("\n") : "command failed";
 }
 
+function publicInputsToBytes(publicInputs: string[]) {
+  const hex = publicInputs
+    .map((field, index) => {
+      const clean = field.startsWith("0x") ? field.slice(2) : field;
+      if (!/^[0-9a-fA-F]{1,64}$/.test(clean)) {
+        throw new ProverError(500, "PROOF_GENERATION_FAILED", `Invalid public input field at index ${index}.`);
+      }
+      return clean.padStart(64, "0");
+    })
+    .join("");
+
+  return Buffer.from(hex, "hex");
+}
+
 async function run(command: string, args: string[], cwd: string, env: NodeJS.ProcessEnv = process.env) {
   try {
     await execFileAsync(command, args, {
@@ -242,83 +268,216 @@ async function writableNargoEnv(workDir: string) {
   };
 }
 
-function publicInputsToBytes(publicInputs: string[]) {
-  const hex = publicInputs
-    .map((field, index) => {
-      const clean = field.startsWith("0x") ? field.slice(2) : field;
-      if (!/^[0-9a-fA-F]{1,64}$/.test(clean)) {
-        throw new ProverError(500, "PROOF_GENERATION_FAILED", `Invalid public input field at index ${index}.`);
-      }
-      return clean.padStart(64, "0");
-    })
-    .join("");
+function fieldTextToBytes(value: string, index: number) {
+  const trimmed = value.trim().replace(/^"|"$/g, "");
+  if (!trimmed) {
+    throw new ProverError(500, "PROOF_GENERATION_FAILED", `Empty public input field at index ${index}.`);
+  }
 
-  return Buffer.from(hex, "hex");
+  const parsed = trimmed.startsWith("0x") ? BigInt(trimmed) : BigInt(trimmed);
+  const hex = parsed.toString(16);
+  if (hex.length > 64) {
+    throw new ProverError(500, "PROOF_GENERATION_FAILED", `Public input field at index ${index} exceeds 32 bytes.`);
+  }
+  return hex.padStart(64, "0");
+}
+
+function publicInputFileToBytes(bytes: Buffer) {
+  const text = bytes.toString("utf8").trim();
+  if (!text) {
+    throw new ProverError(500, "PROOF_GENERATION_FAILED", "Public input file is empty.");
+  }
+
+  const jsonLike = text.startsWith("[") ? text : "";
+  if (jsonLike) {
+    try {
+      const parsed = JSON.parse(jsonLike) as unknown;
+      if (Array.isArray(parsed)) {
+        return publicInputsToBytes(parsed.map((item) => String(item)));
+      }
+    } catch {
+      // Fall through to token parsing below.
+    }
+  }
+
+  const tokens = text.match(/0x[0-9a-fA-F]+|\b\d+\b/g);
+  if (tokens && tokens.length > 0) {
+    return Buffer.from(tokens.map(fieldTextToBytes).join(""), "hex");
+  }
+
+  return bytes;
+}
+
+function proofFileToBytes(bytes: Buffer) {
+  const text = bytes.toString("utf8").trim();
+  const clean = text.startsWith("0x") ? text.slice(2) : text;
+  if (clean.length > 0 && clean.length % 2 === 0 && /^[0-9a-fA-F]+$/.test(clean)) {
+    return Buffer.from(clean, "hex");
+  }
+  return bytes;
+}
+
+async function readFirstExisting(paths: string[], label: string) {
+  for (const path of paths) {
+    if (existsSync(path)) return readFile(path);
+  }
+  throw new ProverError(500, "PROOF_GENERATION_FAILED", `${label} was not written by bb.`);
+}
+
+async function proveWithBbCli(workDir: string) {
+  const crsPath = resolve(workDir, ".bb-crs");
+  await mkdir(crsPath, { recursive: true });
+
+  const targetDir = resolve(workDir, "target");
+  const proofDir = resolve(targetDir, "bb-proof");
+  await mkdir(proofDir, { recursive: true });
+
+  await run(
+    bbBin,
+    [
+      "prove",
+      "--scheme",
+      "ultra_honk",
+      "--bytecode_path",
+      resolve(targetDir, "stelakey_auth.json"),
+      "--witness_path",
+      resolve(targetDir, "stelakey_auth.gz"),
+      "--output_path",
+      proofDir,
+      "--oracle_hash",
+      "keccak",
+      "--output_format",
+      "bytes_and_fields",
+      "--verify",
+      "--crs_path",
+      crsPath
+    ],
+    workDir
+  );
+
+  const [proofFile, publicInputsFile] = await Promise.all([
+    readFirstExisting(
+      [
+        resolve(proofDir, "proof"),
+        resolve(proofDir, "proof.bin"),
+        resolve(proofDir, "proof.bytes"),
+        resolve(proofDir, "proof.data")
+      ],
+      "Proof"
+    ),
+    readFirstExisting(
+      [
+        resolve(proofDir, "public_inputs"),
+        resolve(proofDir, "public_inputs_fields"),
+        resolve(proofDir, "public_inputs.json"),
+        resolve(proofDir, "public_inputs.txt")
+      ],
+      "Public inputs"
+    )
+  ]);
+
+  return {
+    proofBytes: proofFileToBytes(proofFile),
+    publicInputs: publicInputFileToBytes(publicInputsFile)
+  };
 }
 
 async function proveWithBbJs(workDir: string) {
   const crsPath = resolve(workDir, ".bb-crs");
+  const targetDir = resolve(workDir, "target");
+  const proofPath = resolve(targetDir, "bb-proof-with-public-inputs");
+  const verificationKeyPath = resolve(targetDir, "bb-vk");
   await mkdir(crsPath, { recursive: true });
+  const bbEnv = {
+    ...(await writableNargoEnv(workDir)),
+    HARDWARE_CONCURRENCY: "1"
+  };
 
-  const [artifactText, witness] = await Promise.all([
-    readFile(resolve(workDir, "target/stelakey_auth.json"), "utf8"),
-    readFile(resolve(workDir, "target/stelakey_auth.gz"))
-  ]);
-  const artifact = JSON.parse(artifactText) as { bytecode?: unknown };
-
-  if (typeof artifact.bytecode !== "string" || artifact.bytecode.length === 0) {
-    throw new ProverError(500, "PROOF_GENERATION_FAILED", "Compiled Noir artifact is missing bytecode.");
-  }
-
-  const backend = new UltraHonkBackend(artifact.bytecode, { threads: 1, crsPath });
   try {
-    const proofData = await backend.generateProof(witness, { keccak: true });
-    const verified = await backend.verifyProof(proofData, { keccak: true });
-    if (!verified) {
-      throw new ProverError(500, "PROOF_GENERATION_FAILED", "Generated proof failed local verification.");
+    await run(
+      process.execPath,
+      [
+        bbJsCliBin,
+        "--crs-path",
+        crsPath,
+        "prove_ultra_keccak_honk",
+        "--bytecode-path",
+        resolve(targetDir, "stelakey_auth.json"),
+        "--witness-path",
+        resolve(targetDir, "stelakey_auth.gz"),
+        "--output-path",
+        proofPath
+      ],
+      workDir,
+      bbEnv
+    );
+
+    await run(
+      process.execPath,
+      [
+        bbJsCliBin,
+        "--crs-path",
+        crsPath,
+        "write_vk_ultra_keccak_honk",
+        "--bytecode-path",
+        resolve(targetDir, "stelakey_auth.json"),
+        "--output-path",
+        verificationKeyPath
+      ],
+      workDir,
+      bbEnv
+    );
+
+    await run(
+      process.execPath,
+      [
+        bbJsCliBin,
+        "--crs-path",
+        crsPath,
+        "verify_ultra_keccak_honk",
+        "--proof-path",
+        proofPath,
+        "--vk",
+        verificationKeyPath
+      ],
+      workDir,
+      bbEnv
+    );
+
+    const proofWithPublicInputs = proofFileToBytes(await readFile(proofPath));
+    if (proofWithPublicInputs.length <= PUBLIC_INPUT_BYTES) {
+      throw new ProverError(500, "PROOF_GENERATION_FAILED", "Proof output did not contain public inputs.");
     }
 
     return {
-      proofBytes: Buffer.from(proofData.proof),
-      publicInputs: publicInputsToBytes(proofData.publicInputs)
+      proofBytes: proofWithPublicInputs.subarray(PUBLIC_INPUT_BYTES),
+      publicInputs: proofWithPublicInputs.subarray(0, PUBLIC_INPUT_BYTES)
     };
-  } finally {
-    await backend.destroy();
+  } catch (error) {
+    if (error instanceof ProverError) throw error;
+    console.error("prover_bbjs_cli_failed", {
+      detail: commandFailureDetail(error)
+    });
+    throw new ProverError(
+      500,
+      "PROOF_GENERATION_FAILED",
+      "Authorization could not be completed because the proof service could not generate a valid proof. No transaction was submitted."
+    );
   }
-}
-
-function hasBbJsRuntimeAssets() {
-  const copiedAssets = [
-    resolve(appDir, ".next/barretenberg-threads.wasm.gz"),
-    resolve(appDir, ".next/server/chunks/main.worker.js"),
-    resolve(appDir, ".next/server/chunks/thread.worker.js")
-  ];
-  const packageAssets = [
-    resolve(appDir, "node_modules/@aztec/bb.js/dest/node/barretenberg_wasm/barretenberg-threads.wasm.gz"),
-    resolve(
-      appDir,
-      "node_modules/@aztec/bb.js/dest/node/barretenberg_wasm/barretenberg_wasm_main/factory/node/main.worker.js"
-    ),
-    resolve(
-      appDir,
-      "node_modules/@aztec/bb.js/dest/node/barretenberg_wasm/barretenberg_wasm_thread/factory/node/thread.worker.js"
-    )
-  ];
-
-  return copiedAssets.every((asset) => existsSync(asset)) || packageAssets.every((asset) => existsSync(asset));
 }
 
 export function proverReadiness() {
   const missing: string[] = [];
   if (!existsSync(circuitDir)) missing.push("prover circuit");
   if (!existsSync(nargoBin)) missing.push("nargo binary");
-  if (!hasBbJsRuntimeAssets()) missing.push("bb.js runtime assets");
+  if (useBbJsBackend() && !existsSync(bbJsCliBin)) missing.push("bb.js CLI");
+  if (!useBbJsBackend() && !existsSync(bbBin)) missing.push("bb binary");
   if (!process.env.PROVER_HMAC_SECRET && process.env.VERCEL) missing.push("prover HMAC secret");
 
   return {
     ok: missing.length === 0,
     service: "stelakey-prover",
-    proofBackend: "noir-ultrahonk-bbjs",
+    proofBackend: proofBackendLabel(),
     status: missing.length === 0 ? "ready" : "missing-config",
     missing
   };
@@ -329,6 +488,11 @@ export async function proverRuntimeReadiness() {
   let nargoRunnable = false;
   let nargoVersion: string | undefined;
   let nargoError: string | undefined;
+  let bbRunnable = false;
+  let bbVersion: string | undefined;
+  let bbError: string | undefined;
+  let bbJsLoadable = false;
+  let bbJsError: string | undefined;
 
   if (existsSync(nargoBin)) {
     try {
@@ -344,16 +508,48 @@ export async function proverRuntimeReadiness() {
     }
   }
 
+  if (useBbJsBackend()) {
+    try {
+      await execFileAsync(process.execPath, [bbJsCliBin, "--help"], {
+        env: process.env,
+        maxBuffer: 1024 * 1024
+      });
+      bbJsLoadable = true;
+    } catch (error) {
+      bbJsError = commandFailureDetail(error);
+      console.error("prover_bbjs_health_failed", { detail: bbJsError });
+    }
+  } else if (existsSync(bbBin)) {
+    try {
+      const { stdout } = await execFileAsync(bbBin, ["--version"], {
+        env: process.env,
+        maxBuffer: 1024 * 1024
+      });
+      bbRunnable = true;
+      bbVersion = stdout.trim();
+    } catch (error) {
+      bbError = commandFailureDetail(error);
+      console.error("prover_bb_health_failed", { detail: bbError });
+    }
+  }
+
   const missing = [...readiness.missing];
   if (!nargoRunnable) missing.push("nargo executable");
+  const backendRunnable = useBbJsBackend() ? bbJsLoadable : bbRunnable;
+  if (!backendRunnable) missing.push(useBbJsBackend() ? "bb.js runtime" : "bb executable");
 
   return {
     ...readiness,
-    ok: readiness.ok && nargoRunnable,
-    status: readiness.ok && nargoRunnable ? "ready" : "missing-config",
+    ok: readiness.ok && nargoRunnable && backendRunnable,
+    status: readiness.ok && nargoRunnable && backendRunnable ? "ready" : "missing-config",
     nargoRunnable,
+    bbRunnable,
+    bbJsLoadable,
     ...(nargoVersion ? { nargoVersion } : {}),
+    ...(bbVersion ? { bbVersion } : {}),
     ...(nargoError ? { nargoError: "nargo could not execute in this runtime" } : {}),
+    ...(bbError ? { bbError: "bb could not execute in this runtime" } : {}),
+    ...(bbJsError ? { bbJsError: "bb.js could not load in this runtime" } : {}),
     missing
   };
 }
@@ -494,7 +690,9 @@ wallet_scheme = "1"
     await writeFile(resolve(workDir, "Prover.toml"), proverToml);
     await run(nargoBin, ["compile", "--force"], workDir, nargoEnv);
     await run(nargoBin, ["execute", "stelakey_auth"], workDir, nargoEnv);
-    const { proofBytes, publicInputs } = await proveWithBbJs(workDir);
+    const { proofBytes, publicInputs } = useBbJsBackend()
+      ? await proveWithBbJs(workDir)
+      : await proveWithBbCli(workDir);
 
     return {
       proofId,

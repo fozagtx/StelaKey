@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { recordStelaKeyActivityEvent } from "@/lib/activity-events";
 import { ProductIcon } from "./product-icon";
 import { StatusToast } from "./status-toast";
 import { compact, useWalletSession } from "./wallet-session";
@@ -74,6 +75,9 @@ type SubmitResult = {
   errorCode?: string;
   message?: string;
 };
+
+type FlowStep = "prepare" | "sign" | "authorize" | "submit";
+type FlowStepState = "blocked" | "ready" | "active" | "done" | "failed";
 
 const RELAYER_URL = process.env.NEXT_PUBLIC_RELAYER_URL;
 
@@ -151,7 +155,10 @@ export function TransferFlow() {
   const [signature, setSignature] = useState("");
   const [proof, setProof] = useState<ProofResult | null>(null);
   const [submitted, setSubmitted] = useState<SubmitResult | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
+  const [busy, setBusy] = useState<FlowStep | null>(null);
+  const [busySince, setBusySince] = useState<number | null>(null);
+  const [busyElapsedSeconds, setBusyElapsedSeconds] = useState(0);
+  const [failedStep, setFailedStep] = useState<FlowStep | null>(null);
   const [notice, setNotice] = useState("");
   const [activity, setActivity] = useState<Activity[]>([
     { label: "Waiting", detail: "Create an account, enter a recipient, then prepare the payment.", tone: "warn" }
@@ -162,7 +169,15 @@ export function TransferFlow() {
     return accountStatus.accountContractId ?? null;
   }, [accountStatus]);
   const normalizedAssetCode = assetCode.trim().toUpperCase();
-  const accountXlmBalance = accountStatus?.xlmBalance
+  const accountLoading = Boolean(wallet) && accountStatus === null;
+  const accountContractLabel = accountLoading
+    ? "Checking account"
+    : accountContractId
+      ? compact(accountContractId, 14, 10)
+      : "Create account first";
+  const accountXlmBalance = accountLoading
+    ? "Checking balance"
+    : accountStatus?.xlmBalance
     ? `${accountStatus.xlmBalance} XLM`
     : accountStatus?.xlmBalanceError
       ? "Could not load balance"
@@ -182,6 +197,129 @@ export function TransferFlow() {
     balanceStroops !== null &&
     requestedStroops !== null &&
     balanceStroops < requestedStroops;
+  const isBusy = busy !== null;
+  const prepareDone = Boolean(challenge && authPayload);
+  const signDone = Boolean(signature);
+  const authorizeDone = proofReady;
+  const submitDone = submitted?.status === "submitted" && Boolean(submitted.txHash);
+
+  const stepState = (step: FlowStep): FlowStepState => {
+    if (busy === step) return "active";
+    if (failedStep === step) return "failed";
+
+    if (step === "prepare") {
+      if (prepareDone) return "done";
+      return accountContractId && !xlmBalanceTooLow && !amountInvalid && !assetCodeInvalid && !assetIssuerRequired
+        ? "ready"
+        : "blocked";
+    }
+    if (step === "sign") {
+      if (signDone) return "done";
+      return prepareDone ? "ready" : "blocked";
+    }
+    if (step === "authorize") {
+      if (authorizeDone) return "done";
+      return signDone ? "ready" : "blocked";
+    }
+    if (submitDone) return "done";
+    return authorizeDone ? "ready" : "blocked";
+  };
+
+  const stepText = (step: FlowStep) => {
+    const state = stepState(step);
+    if (state === "active") return `Loading ${busyElapsedSeconds}s`;
+    const labels: Record<FlowStep, Record<FlowStepState, string>> = {
+      prepare: {
+        blocked: "Needs account",
+        ready: "Ready to prepare",
+        active: "Preparing",
+        done: "Prepared",
+        failed: "Prepare failed"
+      },
+      sign: {
+        blocked: "Prepare first",
+        ready: "Ready to sign",
+        active: "Signing",
+        done: "Signed",
+        failed: "Signature failed"
+      },
+      authorize: {
+        blocked: "Sign first",
+        ready: "Ready to authorize",
+        active: "Authorizing",
+        done: "Proof ready",
+        failed: "Authorization failed"
+      },
+      submit: {
+        blocked: "Authorize first",
+        ready: "Ready to submit",
+        active: "Submitting",
+        done: "Submitted",
+        failed: "Submit failed"
+      }
+    };
+    return labels[step][state];
+  };
+
+  const stepButtonLabel = (step: FlowStep) => {
+    if (busy === step) return stepText(step);
+    if (failedStep === step) {
+      return step === "submit" ? "Retry submit" : `Retry ${step}`;
+    }
+    if (stepState(step) === "done") return stepText(step);
+    if (step === "prepare") return "Prepare";
+    if (step === "sign") return "Sign payment";
+    if (step === "authorize") return "Authorize";
+    return "Submit payment";
+  };
+
+  const journeySteps: Array<{ step: FlowStep; title: string; detail: string }> = [
+    {
+      step: "prepare",
+      title: "Prepare",
+      detail: authPayload
+        ? compact(authPayload.signaturePayloadHash, 10, 8)
+        : accountLoading
+          ? "Checking account"
+          : accountContractId
+            ? "Recipient and amount"
+            : "Account first"
+    },
+    {
+      step: "sign",
+      title: "Sign",
+      detail: signature ? "Wallet signed" : challenge ? "Wallet approval" : "Prepare first"
+    },
+    {
+      step: "authorize",
+      title: "Authorize",
+      detail: proofReady && proof ? `Proof ${compact(proof.proofId, 8, 6)}` : signature ? "Generate proof" : "Sign first"
+    },
+    {
+      step: "submit",
+      title: "Submit",
+      detail: submitted?.txHash
+        ? compact(submitted.txHash, 8, 6)
+        : submitted?.status === "rejected"
+          ? "Rejected"
+          : proofReady
+            ? "Ready"
+            : "Authorize first"
+    }
+  ];
+
+  const beginStep = (step: FlowStep) => {
+    setNotice("");
+    setBusy(step);
+    setBusySince(Date.now());
+    setBusyElapsedSeconds(0);
+    setFailedStep(null);
+  };
+
+  const finishStep = () => {
+    setBusy(null);
+    setBusySince(null);
+  };
 
   useEffect(() => {
     let active = true;
@@ -191,6 +329,10 @@ export function TransferFlow() {
     setSignature("");
     setProof(null);
     setSubmitted(null);
+    setBusy(null);
+    setBusySince(null);
+    setBusyElapsedSeconds(0);
+    setFailedStep(null);
 
     async function loadAccountStatus() {
       if (!wallet) return;
@@ -222,6 +364,20 @@ export function TransferFlow() {
     };
   }, [wallet]);
 
+  useEffect(() => {
+    if (!busy || busySince === null) {
+      setBusyElapsedSeconds(0);
+      return undefined;
+    }
+
+    const updateElapsed = () => {
+      setBusyElapsedSeconds(Math.max(0, Math.floor((Date.now() - busySince) / 1000)));
+    };
+    updateElapsed();
+    const timer = window.setInterval(updateElapsed, 1000);
+    return () => window.clearInterval(timer);
+  }, [busy, busySince]);
+
   function pushActivity(item: Activity) {
     setActivity((items) => [{ ...item, label: `${nowLabel()} ${item.label}` }, ...items].slice(0, 8));
   }
@@ -232,6 +388,7 @@ export function TransferFlow() {
     setSignature("");
     setProof(null);
     setSubmitted(null);
+    setFailedStep(null);
   }
 
   function updateDestination(value: string) {
@@ -256,8 +413,7 @@ export function TransferFlow() {
   }
 
   async function requestChallenge() {
-    setNotice("");
-    setBusy("challenge");
+    beginStep("prepare");
     try {
       if (!wallet) throw new Error("Connect a wallet first.");
       if (!accountContractId) throw new Error("Create your Stellar account before preparing a payment.");
@@ -300,6 +456,7 @@ export function TransferFlow() {
       setAuthPayload(payload);
       setProof(null);
       setSubmitted(null);
+      setFailedStep(null);
       const response = await fetch("/api/challenges", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -327,32 +484,35 @@ export function TransferFlow() {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Authorization failed.";
       setNotice(message);
+      setFailedStep("prepare");
       pushActivity({ label: "Authorization stopped", detail: message, tone: "bad" });
     } finally {
-      setBusy(null);
+      finishStep();
     }
   }
 
   async function signChallenge() {
-    setNotice("");
-    setBusy("signature");
+    beginStep("sign");
     try {
       if (!challenge) throw new Error("Prepare the payment first.");
       const signed = await signMessage(challenge.message);
       setSignature(signed);
+      setProof(null);
+      setSubmitted(null);
+      setFailedStep(null);
       pushActivity({ label: "Signed", detail: compact(signed, 10, 8), tone: "good" });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Signature failed.";
       setNotice(message);
+      setFailedStep("sign");
       pushActivity({ label: "Signature failed", detail: message, tone: "bad" });
     } finally {
-      setBusy(null);
+      finishStep();
     }
   }
 
   async function generateProof() {
-    setNotice("");
-    setBusy("proof");
+    beginStep("authorize");
     try {
       if (!wallet || !challenge || !signature) throw new Error("Sign the payment first.");
       const response = await fetch("/api/proofs", {
@@ -376,20 +536,24 @@ export function TransferFlow() {
         throw new Error("Authorization did not return complete proof data. No transaction was submitted.");
       }
       setProof(nextProof);
+      setSubmitted(null);
+      setFailedStep(null);
       pushActivity({ label: "Authorized", detail: `Proof ${compact(nextProof.proofId, 10, 8)} is ready.`, tone: "good" });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Authorization failed.";
       setNotice(message);
+      setFailedStep("authorize");
       pushActivity({ label: "Authorization stopped", detail: message, tone: "bad" });
     } finally {
-      setBusy(null);
+      finishStep();
     }
   }
 
   async function submitPayment() {
-    setNotice("");
-    setBusy("submit");
+    setSubmitted(null);
+    beginStep("submit");
     try {
+      if (!wallet) throw new Error("Connect a wallet first.");
       if (!authPayload || !proof) throw new Error("Authorize the payment first.");
       if (!proofReady) {
         throw new Error("Authorization did not return complete proof data. No transaction was submitted.");
@@ -412,12 +576,25 @@ export function TransferFlow() {
       const body = (await response.json().catch(() => ({}))) as SubmitResult;
       if (!response.ok || body.status === "rejected") {
         const code = typeof body.errorCode === "string" ? body.errorCode : `HTTP_${response.status}`;
-        throw new Error(submitMessage(code, body.message));
+        const message = submitMessage(code, body.message);
+        setSubmitted({ status: "rejected", errorCode: code, message });
+        throw new Error(message);
       }
       if (body.status !== "submitted" || !body.txHash) {
         throw new Error("Payment submission did not return a confirmed transaction hash. No success was recorded.");
       }
       setSubmitted(body);
+      setFailedStep(null);
+      recordStelaKeyActivityEvent({
+        type: "payment_sent",
+        walletAddress: wallet.address,
+        accountContractId: authPayload.accountContractId,
+        txHash: body.txHash,
+        ...(body.explorerUrl ? { explorerUrl: body.explorerUrl } : {}),
+        amount,
+        assetCode: normalizedAssetCode,
+        destination
+      });
       pushActivity({
         label: "Payment sent",
         detail: compact(body.txHash, 12, 10),
@@ -426,9 +603,11 @@ export function TransferFlow() {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Payment submit failed.";
       setNotice(message);
+      setSubmitted((current) => current ?? { status: "rejected", message });
+      setFailedStep("submit");
       pushActivity({ label: "Payment stopped", detail: message, tone: "bad" });
     } finally {
-      setBusy(null);
+      finishStep();
     }
   }
 
@@ -442,127 +621,161 @@ export function TransferFlow() {
       />
       <Card className="transfer-card">
         <CardHeader className="compact-card-header">
-          <CardTitle>Authorize payment</CardTitle>
+          <CardTitle>Transfer</CardTitle>
         </CardHeader>
-        <CardContent className="compact-card-content">
-        <div className="intent-strip">
-          <span>Stellar account</span>
-          <strong>{accountContractId ? compact(accountContractId, 14, 10) : "Create account first"}</strong>
-        </div>
-        <div className="intent-strip">
-          <span>XLM balance</span>
-          <strong>{accountXlmBalance}</strong>
-        </div>
-        <Label>
-          Recipient
-          <Input value={destination} onChange={(event) => updateDestination(event.target.value)} placeholder="G..." />
-        </Label>
-        <div className="split">
-          <Label>
-            Amount
-            <Input value={amount} onChange={(event) => updateAmount(event.target.value)} />
-          </Label>
-          <Label>
-            Asset
-            <Input value={assetCode} onChange={(event) => updateAssetCode(event.target.value)} />
-          </Label>
-        </div>
-        {normalizedAssetCode !== "XLM" ? (
-          <Label className="issuer-field">
-            Asset issuer
-            <Input value={assetIssuer} onChange={(event) => updateAssetIssuer(event.target.value)} placeholder="G..." />
-          </Label>
-        ) : null}
-        <div className="intent-strip">
-          <span>Authorization payload</span>
-          <strong>{authPayload ? compact(authPayload.signaturePayloadHash, 12, 10) : "Prepare first"}</strong>
-        </div>
-        <div className="intent-strip">
-          <span>Payment submission</span>
-          <strong>
-            {submitted?.txHash
-              ? compact(submitted.txHash, 12, 10)
-              : proof?.status === "ready"
-                ? "Ready to submit"
-                : "Not submitted"}
-          </strong>
-        </div>
-        <div className="proof-status">
-          <div>
-            <span>Account</span>
-            <strong>
-              {accountContractId
-                ? xlmBalanceTooLow
-                  ? "Fund account first"
-                  : "Existing account ready"
-                : "Account required"}
-            </strong>
+        <CardContent className="compact-card-content transfer-card-content">
+          <div className="transfer-main-grid">
+            <section className="transfer-form-panel" aria-label="Payment details">
+              <div className="transfer-form-summary">
+                <div className="intent-strip">
+                  <span>Stellar account</span>
+                  <strong>{accountContractLabel}</strong>
+                </div>
+                <div className="intent-strip">
+                  <span>XLM balance</span>
+                  <strong>{accountXlmBalance}</strong>
+                </div>
+              </div>
+              <Label>
+                Recipient
+                <Input value={destination} onChange={(event) => updateDestination(event.target.value)} placeholder="G..." />
+              </Label>
+              <div className="split">
+                <Label>
+                  Amount
+                  <Input value={amount} onChange={(event) => updateAmount(event.target.value)} />
+                </Label>
+                <Label>
+                  Asset
+                  <Input value={assetCode} onChange={(event) => updateAssetCode(event.target.value)} />
+                </Label>
+              </div>
+              {normalizedAssetCode !== "XLM" ? (
+                <Label className="issuer-field">
+                  Asset issuer
+                  <Input value={assetIssuer} onChange={(event) => updateAssetIssuer(event.target.value)} placeholder="G..." />
+                </Label>
+              ) : null}
+              <div className="button-row transfer-actions">
+                <Button
+                  onClick={requestChallenge}
+                  data-step-state={stepState("prepare")}
+                  className="flow-button"
+                  disabled={
+                    isBusy ||
+                    submitDone ||
+                    (prepareDone && failedStep !== "prepare") ||
+                    !accountContractId ||
+                    xlmBalanceTooLow ||
+                    amountInvalid ||
+                    assetCodeInvalid ||
+                    assetIssuerRequired
+                  }
+                >
+                  <span className="button-symbol" aria-hidden="true">
+                    <ProductIcon name="payment" size={19} strokeWidth={2} />
+                  </span>
+                  {stepButtonLabel("prepare")}
+                </Button>
+                {xlmBalanceTooLow ? (
+                  <Button asChild variant="outline">
+                    <a href="/account">
+                      <ProductIcon name="payment" size={19} strokeWidth={2} />
+                      Fund account
+                    </a>
+                  </Button>
+                ) : null}
+                <Button
+                  onClick={signChallenge}
+                  disabled={isBusy || submitDone || !challenge || (signDone && failedStep !== "sign")}
+                  variant="secondary"
+                  data-step-state={stepState("sign")}
+                  className="flow-button"
+                >
+                  <span className="button-symbol" aria-hidden="true">
+                    <ProductIcon name="wallet" size={19} strokeWidth={2} />
+                  </span>
+                  {stepButtonLabel("sign")}
+                </Button>
+                <Button
+                  onClick={generateProof}
+                  disabled={isBusy || submitDone || !signature || (authorizeDone && failedStep !== "authorize")}
+                  variant="outline"
+                  data-step-state={stepState("authorize")}
+                  className="flow-button"
+                >
+                  <span className="button-symbol" aria-hidden="true">
+                    <ProductIcon name="authorize" size={19} strokeWidth={2} />
+                  </span>
+                  {stepButtonLabel("authorize")}
+                </Button>
+                <Button
+                  onClick={submitPayment}
+                  disabled={isBusy || submitDone || !proofReady}
+                  variant="secondary"
+                  data-step-state={stepState("submit")}
+                  className="flow-button"
+                >
+                  <span className="button-symbol" aria-hidden="true">
+                    <ProductIcon name="transfer" size={19} strokeWidth={2} />
+                  </span>
+                  {stepButtonLabel("submit")}
+                </Button>
+              </div>
+            </section>
+
+            <section className="transfer-journey-panel" aria-label="Payment journey">
+              <div className="journey-heading">
+                <span>Payment journey</span>
+                <strong>
+                  {busy
+                    ? `Loading ${busyElapsedSeconds}s`
+                    : submitDone
+                      ? "Submitted"
+                      : failedStep
+                        ? stepText(failedStep)
+                        : "Prepare to submit"}
+                </strong>
+              </div>
+              <ol className="transfer-journey">
+                {journeySteps.map((item, index) => (
+                  <li key={item.step} data-step-state={stepState(item.step)}>
+                    <span className="journey-node">{index + 1}</span>
+                    <div>
+                      <span>{item.title}</span>
+                      <strong>{busy === item.step ? `Loading ${busyElapsedSeconds}s` : item.detail}</strong>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+              <div className="transfer-meta-grid">
+                <div className="intent-strip">
+                  <span>Authorization payload</span>
+                  <strong>{authPayload ? compact(authPayload.signaturePayloadHash, 12, 10) : "Prepare first"}</strong>
+                </div>
+                <div className="intent-strip">
+                  <span>Payment submission</span>
+                  <strong>
+                    {submitted?.status === "rejected"
+                      ? "Rejected"
+                      : submitted?.txHash
+                        ? compact(submitted.txHash, 12, 10)
+                        : proof?.status === "ready"
+                          ? "Ready to submit"
+                          : "Not submitted"}
+                  </strong>
+                </div>
+              </div>
+              {submitted?.explorerUrl ? (
+                <Button asChild variant="outline" className="account-cta transfer-link">
+                  <a href={submitted.explorerUrl} target="_blank" rel="noreferrer">
+                    <ProductIcon name="link" size={20} />
+                    View transaction
+                  </a>
+                </Button>
+              ) : null}
+            </section>
           </div>
-          <div>
-            <span>Wallet signature</span>
-            <strong>{signature ? "Signed current payment" : "Not signed"}</strong>
-          </div>
-          <div>
-            <span>ZK proof</span>
-            <strong>{proofReady ? `Generated ${compact(proof.proofId, 10, 8)}` : "Not generated"}</strong>
-          </div>
-          <div>
-            <span>Stellar result</span>
-            <strong>{submitted?.txHash ? `Confirmed ${compact(submitted.txHash, 10, 8)}` : "Not confirmed"}</strong>
-          </div>
-        </div>
-        <div className="button-row spacious">
-          <Button
-            onClick={requestChallenge}
-            disabled={
-              !accountContractId ||
-              xlmBalanceTooLow ||
-              amountInvalid ||
-              assetCodeInvalid ||
-              assetIssuerRequired ||
-              busy === "challenge"
-            }
-          >
-            <span className="button-symbol" aria-hidden="true">
-              <ProductIcon name="payment" size={19} strokeWidth={2} />
-            </span>
-            {busy === "challenge" ? "Preparing..." : "Prepare"}
-          </Button>
-          {xlmBalanceTooLow ? (
-            <Button asChild variant="outline">
-              <a href="/account">
-                <ProductIcon name="payment" size={19} strokeWidth={2} />
-                Fund account
-              </a>
-            </Button>
-          ) : null}
-          <Button onClick={signChallenge} disabled={!challenge || busy === "signature"} variant="secondary">
-            <span className="button-symbol" aria-hidden="true">
-              <ProductIcon name="wallet" size={19} strokeWidth={2} />
-            </span>
-            {busy === "signature" ? "Signing..." : "Sign"}
-          </Button>
-          <Button onClick={generateProof} disabled={!signature || busy === "proof"} variant="outline">
-            <span className="button-symbol" aria-hidden="true">
-              <ProductIcon name="authorize" size={19} strokeWidth={2} />
-            </span>
-            {busy === "proof" ? "Authorizing..." : "Authorize"}
-          </Button>
-          <Button onClick={submitPayment} disabled={!proofReady || busy === "submit"} variant="secondary">
-            <span className="button-symbol" aria-hidden="true">
-              <ProductIcon name="transfer" size={19} strokeWidth={2} />
-            </span>
-            {busy === "submit" ? "Submitting..." : "Submit payment"}
-          </Button>
-        </div>
-        {submitted?.explorerUrl ? (
-          <Button asChild variant="outline" className="account-cta transfer-link">
-            <a href={submitted.explorerUrl} target="_blank" rel="noreferrer">
-              <ProductIcon name="link" size={20} />
-              View transaction
-            </a>
-          </Button>
-        ) : null}
         </CardContent>
       </Card>
 

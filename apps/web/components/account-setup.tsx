@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { recordStelaKeyActivityEvent } from "@/lib/activity-events";
 import { ProductIcon } from "./product-icon";
 import { StatusToast } from "./status-toast";
 import { compact, useWalletSession } from "./wallet-session";
@@ -159,6 +160,15 @@ export function AccountSetup() {
         return;
       }
       setAccount(result);
+      if (result.txHash) {
+        recordStelaKeyActivityEvent({
+          type: "account_created",
+          walletAddress: wallet.address,
+          accountContractId: result.accountContractId,
+          txHash: result.txHash,
+          ...(result.explorerUrl ? { explorerUrl: result.explorerUrl } : {})
+        });
+      }
       setStatus((current) =>
         current
           ? {
@@ -199,6 +209,15 @@ export function AccountSetup() {
         return;
       }
       setFunded(result);
+      recordStelaKeyActivityEvent({
+        type: "account_funded",
+        walletAddress: wallet.address,
+        accountContractId: result.accountContractId,
+        txHash: result.txHash,
+        ...(result.explorerUrl ? { explorerUrl: result.explorerUrl } : {}),
+        amount: result.amount,
+        assetCode: "XLM"
+      });
       setStatus((current) => {
         if (!current) return current;
         const { xlmBalanceError: _xlmBalanceError, ...rest } = current;

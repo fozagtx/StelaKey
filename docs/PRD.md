@@ -175,13 +175,12 @@ Required:
 - Collapsed sidebar must remain useful: show a clickable icon rail for Account, Transfer, and Activity instead of a blank rail.
 - Sidebar route navigation must not include a visible Dashboard item. The brand mark may link back to `/dashboard`.
 - Sidebar brand must use a dedicated StelaKey mark next to the StelaKey wordmark when expanded, and the mark only when collapsed. Do not combine Bitcoin and Stellar official logos into the StelaKey app logo.
+- The dedicated StelaKey mark is now approved and must be a project bitmap asset in the editorial storybook style, not the earlier hand-drawn SVG placeholder.
 - Sidebar open/close motion must be under 300ms, use a custom easing curve, and respect `prefers-reduced-motion`. Do not add hover/click movement animations to sidebar navigation items; route clicks should feel still and immediate.
 - Protected route headers must avoid duplicate label/title stacks such as "StelaKey account" followed by "Account" or "Transfer" followed by another transfer heading.
-- Wallet identity chip.
-- Account status.
-- Proof path status.
-- Transfer entry point.
-- Security/live-state status.
+- Dashboard must avoid default placeholder dashboard copy. It should show a compact connected-wallet overview, real account loading/ready state, and clear next actions without duplicating sidebar navigation.
+- While dashboard account/payment state is loading, show skeleton/loading language such as "Checking account" instead of rendering missing data as if it were final.
+- Dashboard cards must not feel squeezed into one corner while leaving unused space. Use a balanced compact layout that fits in the first viewport.
 
 ### Account
 
@@ -245,6 +244,10 @@ Current implementation status:
 - Production proof generation must not require a `git` binary at runtime. Noir packages used by the prover must be bundled as local path dependencies and copied into the temporary proof workspace.
 - Transfer `submit` must attach `AuthProof` to the auth entry before signing/sending.
 - The submit path is not live-finished until a real connected wallet signs the transfer challenge and a real Stellar transaction confirms from the browser flow.
+- Transfer must render as one connected journey, not four isolated status boxes. The visual order is Prepare -> Sign -> Authorize -> Submit, with connector lines and persistent state for each step.
+- Active transfer steps must show a visible loading timer in seconds such as `Loading 3s` so users understand long proof/submission work is still running.
+- Transfer layout must keep the form, journey, and payment status balanced. Do not squeeze input/status components together while leaving large unused space inside the main card.
+- Missing account/balance/proof/submission data must render as neutral loading or blocked states, not as harsh default text that looks like a failed final result.
 
 ### Activity
 
@@ -256,7 +259,8 @@ Required:
 
 - Empty state when no events exist.
 - Activity page must use one clear page title and one empty state. Do not repeat "Activity", "history", or empty-state language through duplicate badges, titles, and icons.
-- Activity empty state should be restrained and text-led unless real event data exists. Do not add decorative icons just to fill space.
+- Activity empty state must use one generated bitmap illustration in the approved editorial storybook style, plus short instructions that explain the real path: create account, authorize a payment, then confirmed events appear.
+- Activity empty state must not say only "No activity yet" with a generic sentence. It must help the user know what to do next.
 - Real authorization or proof IDs only when returned by real services.
 - Real Stellar transaction hashes only.
 - Real explorer links only.
@@ -279,13 +283,13 @@ Required:
 - Dashboard and protected route surfaces should not use loud colored card fills. Use warm off-white, white, pale blue, and compact teal typography; reserve yellow/pink/orange/green for small accents or status chips.
 - Dashboard, account, transfer, and activity cards should use light dividers and subtle surface changes rather than thick black outlines everywhere. Keep black outlines for buttons, wallet gates, critical warnings, or intentionally emphasized controls.
 - Protected app badges, routine icons, form fields, account rows, readiness rows, transfer payload rows, and activity items must not reuse the saturated landing palette as their default container treatment. Use neutral surfaces by default and only tint actual success/warning/error states softly.
-- Do not show a custom StelaKey logo mark in the app UI unless the user explicitly approves a new one.
+- A custom StelaKey logo mark is approved for this project. It must be a bitmap/editorial storybook mark inspired by StelaKey's identity, separate from the official Bitcoin and Stellar marks, and must not simply combine the official Bitcoin and Stellar logos.
 - Sidebar navigation should be text-first and compact. Do not add route icons unless they solve a real scan/recognition problem.
 - Protected app routes are a desktop experience. On mobile/tablet widths, blur the app behind a clear full-screen message instead of trying to squeeze account and transfer workflows into an unreliable small-screen layout.
 - Do not use lucide-react icons. Use `@hugeicons/react` with `@hugeicons/core-free-icons` inside CSS-shaped containers.
 - Icon elements must not render visible text letters such as `D`, `A`, `T`, `L`, `W`, `P`, or `K` as icons.
 - Use large Hugeicons only for true gate, empty, or critical state surfaces. Do not put oversized decorative icons in routine form/card headers where they consume workflow space.
-- Visible app branding must say `StelaKey` with no trailing period. Do not show a brand icon beside the app name in the landing nav, wallet gate, or protected app sidebar unless the user explicitly approves a new mark.
+- Visible app branding must say `StelaKey` with no trailing period. The approved bitmap StelaKey mark may appear before the wordmark in the landing nav, wallet gate, and protected app sidebar.
 - Use official-style Bitcoin and Stellar brand marks for the product identity and cross-chain context. Do not use abstract placeholder marks where the user expects Bitcoin/Stellar logos.
 - Landing illustration must include the official Stellar logo form where Stellar is represented. Do not substitute a generic star/sparkle mark or SVG placeholder for Stellar.
 - Protected transfer UI must make the ZK completion condition explicit: account existence is not ZK success; ZK success requires a generated proof from the signed wallet challenge and a confirmed Stellar transaction for the final payment.

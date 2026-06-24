@@ -97,7 +97,8 @@ async function installArchive(url, binaryName) {
 
 async function main() {
   const urls = assetUrls();
-  const installNativeBb = process.env.PROVER_NATIVE_BB === "1" || !process.env.VERCEL;
+  const installNativeBb =
+    process.env.PROVER_NATIVE_BB === "1" || (!process.env.VERCEL && process.env.PROVER_NATIVE_BB !== "0");
   if (installNativeBb && !urls.bb) {
     throw new Error("No Barretenberg CLI release asset is configured for this platform.");
   }
@@ -106,6 +107,8 @@ async function main() {
   await installArchive(urls.nargo, "nargo");
   if (installNativeBb && urls.bb) {
     await installArchive(urls.bb, "bb");
+  } else {
+    await rm(join(binDir, "bb"), { force: true });
   }
   await run(join(binDir, "nargo"), ["--version"]);
   if (installNativeBb) {

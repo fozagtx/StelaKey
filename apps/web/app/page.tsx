@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { StelaKeyMark } from "@/components/brand-logo";
 import { LandingWalletActions } from "@/components/landing-wallet-actions";
 
 const steps = [
@@ -28,6 +29,7 @@ export default function LandingPage() {
       <section className="landing-hero" aria-label="StelaKey">
         <nav className="landing-nav" aria-label="StelaKey home">
           <Link className="landing-brand" href="/">
+            <StelaKeyMark size={34} />
             StelaKey
           </Link>
         </nav>
@@ -106,6 +108,7 @@ export default function LandingPage() {
       <footer className="site-footer">
         <div>
           <Link className="landing-brand" href="/">
+            <StelaKeyMark size={34} />
             StelaKey
           </Link>
           <p>Bitcoin wallet access for Stellar smart accounts.</p>
