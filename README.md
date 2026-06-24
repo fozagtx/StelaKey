@@ -6,8 +6,6 @@ connect a bitcoin wallet, create a stellar smart account, sign a stellar action,
 
 live at [stelakey.vercel.app](https://stelakey.vercel.app/)
 
-also available at [stelakey-fawuzan.vercel.app](https://stelakey-fawuzan.vercel.app/)
-
 ## what it does
 
 use a bitcoin wallet as the control key for a stellar smart account.
