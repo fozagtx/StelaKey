@@ -1398,10 +1398,6 @@ h3 {
   margin-top: 10px;
 }
 
-.transfer-link {
-  margin-top: 8px;
-}
-
 .transfer-grid {
   height: calc(100svh - 28px);
   min-height: 560px;
@@ -1588,6 +1584,51 @@ h3 {
   color: var(--teal);
   font-size: 0.88rem;
   overflow-wrap: anywhere;
+}
+
+.payment-receipt {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--app-good-border);
+  border-radius: 18px;
+  padding: 10px;
+  background: var(--app-good);
+}
+
+.payment-receipt-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--green);
+  color: var(--ink);
+}
+
+.payment-receipt-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.payment-receipt-copy span {
+  color: var(--ink);
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.payment-receipt-copy strong {
+  color: var(--teal);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.payment-receipt-link {
+  white-space: nowrap;
 }
 
 .transfer-grid .activity-list {
@@ -1860,6 +1901,15 @@ input {
   .activity-summary-content,
   .activity-empty-content {
     grid-template-columns: 1fr;
+  }
+
+  .payment-receipt {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .payment-receipt-link {
+    grid-column: 1 / -1;
+    width: 100%;
   }
 
   .landing-hero {

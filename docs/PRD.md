@@ -248,6 +248,7 @@ Current implementation status:
 - Active transfer steps must show a visible loading timer in seconds such as `Loading 3s` so users understand long proof/submission work is still running.
 - Transfer layout must keep the form, journey, and payment status balanced. Do not squeeze input/status components together while leaving large unused space inside the main card.
 - Missing account/balance/proof/submission data must render as neutral loading or blocked states, not as harsh default text that looks like a failed final result.
+- After a confirmed transfer, the transfer journey must show a compact payment receipt with the real transaction hash and a Stellar Expert link. Do not render a receipt or explorer link without a real submitted transaction hash from the service response.
 
 ### Activity
 
@@ -329,6 +330,7 @@ Never allowed:
 - Transfer page cannot request proof without a signed challenge.
 - Proof rejection cannot show success.
 - No page shows a testnet transaction hash unless it came from a real relayer response.
+- Confirmed transfer success shows a clickable Stellar Expert receipt link on the transfer page.
 - Unknown or pending account/service data renders as loading/checking copy, not unavailable/error copy.
 - App uses shadcn/ui foundation while following the supplied blue/white Instrument visual system.
 - Web UI imports no `lucide-react` components.

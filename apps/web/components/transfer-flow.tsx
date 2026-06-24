@@ -86,6 +86,10 @@ function transferApi(path: string) {
   return `${RELAYER_URL.replace(/\/$/, "")}${path}`;
 }
 
+function stellarExpertTxUrl(txHash: string) {
+  return `https://stellar.expert/explorer/testnet/tx/${txHash}`;
+}
+
 function nowLabel() {
   return new Intl.DateTimeFormat(undefined, {
     hour: "2-digit",
@@ -202,6 +206,10 @@ export function TransferFlow() {
   const signDone = Boolean(signature);
   const authorizeDone = proofReady;
   const submitDone = submitted?.status === "submitted" && Boolean(submitted.txHash);
+  const submittedExplorerUrl =
+    submitted?.status === "submitted" && submitted.txHash
+      ? submitted.explorerUrl ?? stellarExpertTxUrl(submitted.txHash)
+      : "";
 
   const stepState = (step: FlowStep): FlowStepState => {
     if (busy === step) return "active";
@@ -583,14 +591,15 @@ export function TransferFlow() {
       if (body.status !== "submitted" || !body.txHash) {
         throw new Error("Payment submission did not return a confirmed transaction hash. No success was recorded.");
       }
-      setSubmitted(body);
+      const explorerUrl = body.explorerUrl ?? stellarExpertTxUrl(body.txHash);
+      setSubmitted({ ...body, explorerUrl });
       setFailedStep(null);
       recordStelaKeyActivityEvent({
         type: "payment_sent",
         walletAddress: wallet.address,
         accountContractId: authPayload.accountContractId,
         txHash: body.txHash,
-        ...(body.explorerUrl ? { explorerUrl: body.explorerUrl } : {}),
+        explorerUrl,
         amount,
         assetCode: normalizedAssetCode,
         destination
@@ -766,13 +775,22 @@ export function TransferFlow() {
                   </strong>
                 </div>
               </div>
-              {submitted?.explorerUrl ? (
-                <Button asChild variant="outline" className="account-cta transfer-link">
-                  <a href={submitted.explorerUrl} target="_blank" rel="noreferrer">
-                    <ProductIcon name="link" size={20} />
-                    View transaction
-                  </a>
-                </Button>
+              {submitted?.status === "submitted" && submitted.txHash ? (
+                <div className="payment-receipt" aria-live="polite">
+                  <span className="payment-receipt-icon" aria-hidden="true">
+                    <ProductIcon name="ready" size={28} strokeWidth={2.2} />
+                  </span>
+                  <div className="payment-receipt-copy">
+                    <span>Payment confirmed</span>
+                    <strong>{compact(submitted.txHash, 14, 12)}</strong>
+                  </div>
+                  <Button asChild className="payment-receipt-link">
+                    <a href={submittedExplorerUrl} target="_blank" rel="noreferrer">
+                      <ProductIcon name="link" size={18} />
+                      View on Stellar Expert
+                    </a>
+                  </Button>
+                </div>
               ) : null}
             </section>
           </div>
